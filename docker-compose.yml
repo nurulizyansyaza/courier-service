@@ -1,0 +1,6 @@
+services:
+  courier-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    stdin_open: true
