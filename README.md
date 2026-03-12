@@ -10,6 +10,24 @@ courier-service-core/     ← NPM package: cost, offers, shipment planning
 courier-service-cli/      ← CLI app consuming the core package
 ```
 
+## Setup
+
+Clone all 3 repos into the same parent directory:
+
+```bash
+mkdir courier-service-project && cd courier-service-project
+git clone https://github.com/nurulizyansyaza/courier-service.git
+git clone https://github.com/nurulizyansyaza/courier-service-core.git
+git clone https://github.com/nurulizyansyaza/courier-service-cli.git
+```
+
+Install and build:
+
+```bash
+cd courier-service-core && npm ci && npm run build && cd ..
+cd courier-service-cli && npm ci && cd ..
+```
+
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:

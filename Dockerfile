@@ -18,6 +18,7 @@ COPY --from=build /app/courier-service-core/package.json ./courier-service-core/
 COPY --from=build /app/courier-service-cli/dist/ ./courier-service-cli/dist/
 COPY --from=build /app/courier-service-cli/bin/ ./courier-service-cli/bin/
 COPY --from=build /app/courier-service-cli/package.json ./courier-service-cli/
-COPY --from=build /app/courier-service-cli/node_modules/ ./courier-service-cli/node_modules/
+COPY --from=build /app/courier-service-cli/package-lock.json ./courier-service-cli/
+RUN cd courier-service-cli && npm ci --omit=dev
 
 ENTRYPOINT ["node", "courier-service-cli/bin/courier-service"]

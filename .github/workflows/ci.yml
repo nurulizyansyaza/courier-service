@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-core
-          ref: issue_2-NPM_Package
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -36,12 +36,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-core
-          ref: issue_2-NPM_Package
+          ref: main
           path: courier-service-core
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-cli
-          ref: issue_3-CLI_App
+          ref: main
           path: courier-service-cli
       - uses: actions/setup-node@v4
         with:
@@ -59,12 +59,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-core
-          ref: issue_2-NPM_Package
+          ref: main
           path: courier-service-core
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-cli
-          ref: issue_3-CLI_App
+          ref: main
           path: courier-service-cli
       - uses: actions/setup-node@v4
         with:
