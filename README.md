@@ -40,7 +40,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 
 ```bash
 # Build (from project root containing all 3 repos)
-docker build -t courier-service .
+docker build -f courier-service/Dockerfile -t courier-service .
 
 # Run Problem 1
 printf '100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003\n' | docker run -i courier-service cost

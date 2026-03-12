@@ -1,6 +1,6 @@
 services:
   courier-service:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: courier-service/Dockerfile
     stdin_open: true
