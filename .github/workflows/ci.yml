@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  CORE_REF: main
+  CLI_REF: main
+
 jobs:
   test-core:
     name: Test Core Package
@@ -17,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-core
-          ref: main
+          ref: ${{ env.CORE_REF }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -36,12 +40,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-core
-          ref: main
+          ref: ${{ env.CORE_REF }}
           path: courier-service-core
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-cli
-          ref: main
+          ref: ${{ env.CLI_REF }}
           path: courier-service-cli
       - uses: actions/setup-node@v4
         with:
@@ -59,12 +63,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-core
-          ref: main
+          ref: ${{ env.CORE_REF }}
           path: courier-service-core
       - uses: actions/checkout@v4
         with:
           repository: nurulizyansyaza/courier-service-cli
-          ref: main
+          ref: ${{ env.CLI_REF }}
           path: courier-service-cli
       - uses: actions/setup-node@v4
         with:
