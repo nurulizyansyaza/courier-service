@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
-  CORE_REF: main
-  CLI_REF: main
+  CORE_REF: issue_2-NPM_Package
+  CLI_REF: issue_3-CLI_App
+  API_REF: issue_4-Expressjs_API
+  FRONTEND_REF: issue_5-React_Dashboard
 
 jobs:
   test-core:
@@ -55,10 +60,55 @@ jobs:
       - run: cd courier-service-core && npm ci && npm run build
       - run: cd courier-service-cli && npm ci && npm test
 
+  test-api:
+    name: Test API
+    runs-on: ubuntu-latest
+    needs: test-core
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-api
+          ref: ${{ env.API_REF }}
+          path: courier-service-api
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: courier-service-api/package-lock.json
+      - run: cd courier-service-core && npm ci && npm run build
+      - run: cd courier-service-api && npm ci && npm test
+
+  test-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-frontend
+          ref: ${{ env.FRONTEND_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+
   test-system:
     name: System Verification
     runs-on: ubuntu-latest
-    needs: [test-core, test-cli]
+    needs: [test-core, test-cli, test-api]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +120,11 @@ jobs:
           repository: nurulizyansyaza/courier-service-cli
           ref: ${{ env.CLI_REF }}
           path: courier-service-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-api
+          ref: ${{ env.API_REF }}
+          path: courier-service-api
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -77,6 +132,7 @@ jobs:
           cache-dependency-path: courier-service-cli/package-lock.json
       - run: cd courier-service-core && npm ci && npm run build
       - run: cd courier-service-cli && npm ci && npx tsc
+      - run: cd courier-service-api && npm ci && npm run build
       - name: System Problem 1 - Delivery Cost
         run: |
           OUTPUT=$(printf '100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003\n' | node courier-service-cli/bin/courier-service cost)
@@ -89,3 +145,29 @@ jobs:
           EXPECTED=$(printf 'PKG1 0 750 3.98\nPKG2 0 1475 1.78\nPKG3 0 2350 1.42\nPKG4 105 1395 0.85\nPKG5 0 2125 4.19')
           if [ "$OUTPUT" != "$EXPECTED" ]; then echo "FAIL"; echo "$OUTPUT"; exit 1; fi
           echo "PASS: Problem 2"
+      - name: System Problem 3 - API Cost Endpoint
+        run: |
+          cd courier-service-api && node -e "
+            const { app } = require('./dist/app');
+            const http = require('http');
+            const server = http.createServer(app);
+            server.listen(0, () => {
+              const port = server.address().port;
+              const postData = JSON.stringify({ input: '100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003' });
+              const req = http.request({ hostname: 'localhost', port, path: '/api/cost', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': postData.length } }, (res) => {
+                let data = '';
+                res.on('data', (c) => data += c);
+                res.on('end', () => {
+                  const body = JSON.parse(data);
+                  const r = body.results;
+                  if (r.length !== 3 || r[0].cost !== 175 || r[1].cost !== 275 || r[2].cost !== 665) {
+                    console.error('FAIL', body); process.exit(1);
+                  }
+                  console.log('PASS: API Cost Endpoint');
+                  server.close();
+                });
+              });
+              req.write(postData);
+              req.end();
+            });
+          "

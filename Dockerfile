@@ -12,6 +12,11 @@ RUN cd courier-service-cli && npm ci
 COPY courier-service-cli/ ./courier-service-cli/
 RUN cd courier-service-cli && npx tsc
 
+COPY courier-service-api/package*.json ./courier-service-api/
+RUN cd courier-service-api && npm ci
+COPY courier-service-api/ ./courier-service-api/
+RUN cd courier-service-api && npm run build
+
 # Stage 2: Runtime
 FROM node:20-alpine
 WORKDIR /app
@@ -26,4 +31,8 @@ RUN cd courier-service-cli && npm ci --omit=dev
 COPY --from=build /app/courier-service-cli/dist/ ./courier-service-cli/dist/
 COPY --from=build /app/courier-service-cli/bin/ ./courier-service-cli/bin/
 
-ENTRYPOINT ["node", "courier-service-cli/bin/courier-service"]
+COPY --from=build /app/courier-service-api/package.json ./courier-service-api/
+COPY --from=build /app/courier-service-api/package-lock.json ./courier-service-api/
+RUN cd courier-service-api && npm ci --omit=dev
+
+COPY --from=build /app/courier-service-api/dist/ ./courier-service-api/dist/

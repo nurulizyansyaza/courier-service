@@ -4,3 +4,12 @@ services:
       context: ..
       dockerfile: courier-service/Dockerfile
     stdin_open: true
+    entrypoint: ["node", "courier-service-cli/bin/courier-service"]
+
+  courier-api:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile
+    entrypoint: ["node", "courier-service-api/dist/index.js"]
+    ports:
+      - "3000:3000"
