@@ -8,9 +8,31 @@ Orchestration repo for the **Courier Service** App Calculator. Ties together the
 courier-service/          ← this repo (CI/CD + Docker)
 courier-service-core/     ← NPM package: cost, offers, shipment planning
 courier-service-cli/      ← CLI app consuming the core package
-courier-service-api/      ← Express REST API consuming the core package
-courier-service-frontend/ ← React/Vue/Svelte dashboard
+courier-service-api/      ← Express REST API with security middleware
+courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 ```
+
+### How They Connect
+
+```
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+│  Frontend    │────▶│   API       │────▶│   Core       │
+│ (Vite SPA)  │proxy│ (Express)   │     │ (TS Library) │
+└─────────────┘     └─────────────┘     └──────────────┘
+                                              ▲    ▲
+┌─────────────┐                               │    │
+│   CLI       │───────────────────────────────┘    │
+│ (Commander) │                                     │
+└─────────────┘                                     │
+                    ┌─────────────┐                  │
+                    │  Frontend   │─── local fallback┘
+                    │ (offline)   │
+                    └─────────────┘
+```
+
+- **Frontend → API → Core**: Primary path. API provides rate limiting, validation, and security headers.
+- **Frontend → Core**: Fallback when API is unreachable. Calculations run client-side.
+- **CLI → Core**: Standalone. CLI reads stdin and outputs results directly.
 
 ## Setup
 
@@ -41,8 +63,23 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 1. **test-core** — installs and tests `courier-service-core` (Node 18 + 20)
 2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20)
 3. **test-api** — installs core + API, runs API tests (Node 18 + 20)
-4. **test-frontend** — type-checks and builds the frontend (Node 18 + 20)
+4. **test-frontend** — type-checks, tests, and builds the frontend (Node 18 + 20)
 5. **test-system** — verifies CLI Problem 1/2 outputs and API cost endpoint
+
+## Security
+
+The API layer includes Express security middleware that protects all endpoints:
+
+| Layer | Protection |
+|-------|-----------|
+| **Helmet** | Security headers against XSS, clickjacking, MIME sniffing |
+| **CORS** | Origin whitelist (dev: localhost:5173, localhost:3000) |
+| **Rate Limiting** | Global: 100 req/15min, Calculations: 30 req/min |
+| **Zod Validation** | Schema-based input validation (type safety, length limits) |
+| **Body Size Limit** | 100kb max request body |
+| **Morgan** | HTTP request logging |
+
+These protect against bots, DDoS, request flooding, and malformed input.
 
 ## Docker
 
