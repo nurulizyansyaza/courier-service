@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "issue_*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CORE_REF: issue_2-NPM_Package
+  CLI_REF: issue_3-CLI_App
+  API_REF: issue_4-Expressjs_API
+  FRONTEND_REF: issue_5-React_Dashboard
+
+jobs:
+  test-core:
+    name: Test Core Package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  test-cli:
+    name: Test CLI App
+    runs-on: ubuntu-latest
+    needs: test-core
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-cli
+          ref: ${{ env.CLI_REF }}
+          path: courier-service-cli
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: courier-service-cli/package-lock.json
+      - run: cd courier-service-core && npm ci && npm run build
+      - run: cd courier-service-cli && npm ci && npm test
+
+  test-api:
+    name: Test API
+    runs-on: ubuntu-latest
+    needs: test-core
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-api
+          ref: ${{ env.API_REF }}
+          path: courier-service-api
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: courier-service-api/package-lock.json
+      - run: cd courier-service-core && npm ci && npm run build
+      - run: cd courier-service-api && npm ci && npm test
+
+  test-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-frontend
+          ref: ${{ env.FRONTEND_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Set React framework for type-checking
+        run: |
+          echo '{"framework":"react"}' > framework.config.json
+          node -e "
+            const fs = require('fs');
+            const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf-8'));
+            tsconfig.compilerOptions.jsx = 'react-jsx';
+            tsconfig.include = ['src/core', 'src/react', 'src/vite-env.d.ts'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(tsconfig, null, 2) + '\n');
+          "
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+
+  test-system:
+    name: System Verification
+    runs-on: ubuntu-latest
+    needs: [test-core, test-cli, test-api]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-cli
+          ref: ${{ env.CLI_REF }}
+          path: courier-service-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-api
+          ref: ${{ env.API_REF }}
+          path: courier-service-api
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: courier-service-cli/package-lock.json
+      - run: cd courier-service-core && npm ci && npm run build
+      - run: cd courier-service-cli && npm ci && npx tsc
+      - run: cd courier-service-api && npm ci && npm run build
+      - name: System Problem 1 - Delivery Cost
+        run: |
+          OUTPUT=$(printf '100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003\n' | node courier-service-cli/bin/courier-service cost)
+          EXPECTED=$(printf 'PKG1 0 175\nPKG2 0 275\nPKG3 35 665')
+          if [ "$OUTPUT" != "$EXPECTED" ]; then echo "FAIL"; echo "$OUTPUT"; exit 1; fi
+          echo "PASS: Problem 1"
+      - name: System Problem 2 - Delivery Time
+        run: |
+          OUTPUT=$(printf '100 5\nPKG1 50 30 OFR001\nPKG2 75 125 OFR008\nPKG3 175 100 OFR003\nPKG4 110 60 OFR002\nPKG5 155 95 NA\n2 70 200\n' | node courier-service-cli/bin/courier-service delivery)
+          EXPECTED=$(printf 'PKG1 0 750 3.98\nPKG2 0 1475 1.78\nPKG3 0 2350 1.42\nPKG4 105 1395 0.85\nPKG5 0 2125 4.19')
+          if [ "$OUTPUT" != "$EXPECTED" ]; then echo "FAIL"; echo "$OUTPUT"; exit 1; fi
+          echo "PASS: Problem 2"
+      - name: System Problem 3 - API Cost Endpoint
+        run: |
+          cd courier-service-api && node -e "
+            const { app } = require('./dist/app');
+            const http = require('http');
+            const server = http.createServer(app);
+            server.listen(0, () => {
+              const port = server.address().port;
+              const postData = JSON.stringify({ input: '100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003' });
+              const req = http.request({ hostname: 'localhost', port, path: '/api/cost', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': postData.length } }, (res) => {
+                let data = '';
+                res.on('data', (c) => data += c);
+                res.on('end', () => {
+                  const body = JSON.parse(data);
+                  const r = body.results;
+                  if (r.length !== 3 || r[0].cost !== 175 || r[1].cost !== 275 || r[2].cost !== 665) {
+                    console.error('FAIL', body); process.exit(1);
+                  }
+                  console.log('PASS: API Cost Endpoint');
+                  server.close();
+                });
+              });
+              req.write(postData);
+              req.end();
+            });
+          "
