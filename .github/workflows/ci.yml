@@ -103,6 +103,16 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Set React framework for type-checking
+        run: |
+          echo '{"framework":"react"}' > framework.config.json
+          node -e "
+            const fs = require('fs');
+            const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf-8'));
+            tsconfig.compilerOptions.jsx = 'react-jsx';
+            tsconfig.include = ['src/core', 'src/react', 'src/vite-env.d.ts'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(tsconfig, null, 2) + '\n');
+          "
       - run: npx tsc --noEmit
       - run: npm test
       - run: npm run build
