@@ -1,10 +1,6 @@
-name: Deploy Staging
+name: Deploy Production
 
 on:
-  push:
-    branches: [staging]
-  repository_dispatch:
-    types: [sub-repo-updated]
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -31,7 +27,7 @@ permissions:
 
 env:
   AWS_REGION: ap-southeast-1
-  ENVIRONMENT: staging
+  ENVIRONMENT: production
   CORE_REF: issue_2-NPM_Package
   CLI_REF: issue_3-CLI_App
   API_REF: issue_4-Expressjs_API
@@ -90,12 +86,12 @@ jobs:
           "
           npm test
 
-  # ── Deploy Infrastructure (if stacks don't exist yet) ──────────────
+  # ── Deploy Infrastructure ──────────────────────────────────────────
   infra:
     name: Ensure Infrastructure
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.inputs.deploy_target == 'all'
+    if: github.event.inputs.deploy_target == 'all'
     steps:
       - uses: actions/checkout@v4
 
@@ -144,7 +140,6 @@ jobs:
             --stack-name "$STACK_NAME" --region "$REGION" \
             --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
           echo "Current stack status: $STATUS"
-          # Wait for any in-progress operations to finish
           if [[ "$STATUS" == *_IN_PROGRESS ]]; then
             echo "Stack operation in progress — waiting for completion..."
             aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
@@ -177,7 +172,7 @@ jobs:
       always() &&
       needs.test.result == 'success' &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
-      (github.event_name == 'push' || github.event.inputs.deploy_target != 'frontend-only')
+      (github.event.inputs.deploy_target != 'frontend-only')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -264,7 +259,7 @@ jobs:
       always() &&
       needs.test.result == 'success' &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
-      (github.event_name == 'push' || github.event.inputs.deploy_target != 'api-only')
+      (github.event.inputs.deploy_target != 'api-only')
     steps:
       - uses: actions/checkout@v4
         with:

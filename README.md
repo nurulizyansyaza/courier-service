@@ -61,7 +61,7 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 
 **No dedicated domain setup as of now** — all endpoints use AWS generated URLs:
 - Frontend: `https://d1234567.cloudfront.net`
-- API: `https://abc123.execute-api.ap-southeast-1.amazonaws.com/staging`
+- API: `https://abc123.execute-api.ap-southeast-1.amazonaws.com/production`
 
 ## Setup
 
@@ -178,9 +178,16 @@ A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g
 
 **Framework switching is per-user**: each user types `use vue` or `use svelte` in their terminal UI, which navigates their browser to `/<framework>/`. Other users are unaffected.
 
-### CI/CD Auto-Deploy
+### CI/CD Deployment
 
-Pushing to the `staging` branch automatically:
+**Production** (this branch) — manual only via `workflow_dispatch`:
+
+```bash
+gh workflow run deploy-production.yml --ref main -f deploy_target=all
+```
+
+This deploys to separate CloudFormation stacks (`courier-frontend-production`, `courier-api-production`) on the same AWS account as staging.
+
 1. Runs all tests (core, CLI, API, frontend)
 2. Deploys/updates CloudFormation stacks
 3. Builds and pushes Docker image to ECR
@@ -188,9 +195,7 @@ Pushing to the `staging` branch automatically:
 5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
 6. Invalidates CloudFront cache
 
-The workflow also accepts **`repository_dispatch`** events (type `sub-repo-updated`), allowing sub-repos (core, CLI, API, frontend) to trigger a staging deploy when their CI passes.
-
-Manual deployment via GitHub Actions `workflow_dispatch` allows deploying only `api-only` or `frontend-only`.
+**Staging** — lives on the `staging` branch. Sub-repo CI auto-triggers staging deploys via `gh workflow run`. See the staging branch README for details.
 
 ### AWS Services Used
 
@@ -214,7 +219,7 @@ infra/
     frontend-stack.yml   # S3 + CloudFront + CloudFront Function (SPA routing) + WAF
     api-stack.yml        # ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF (REGIONAL)
   env/
-    staging.env          # Non-secret config (region, stack names, default framework)
+    production.env       # Production config (region, stack names, default framework)
 scripts/
   deploy-infra.sh        # Deploy/update CloudFormation stacks
   deploy-api.sh          # Build Docker → push ECR → update ECS
@@ -232,12 +237,20 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20)
 5. **test-system** — verifies CLI Problem 1/2 outputs and API cost endpoint
 
-Staging deployment (`.github/workflows/deploy-staging.yml`) runs on push to `staging`:
+Production deployment (`.github/workflows/deploy-production.yml`) — manual `workflow_dispatch` only:
 
-1. Run all tests
-2. Deploy/update CloudFormation stacks
-3. Build & push Docker image → update ECS
-4. Build all 3 frameworks → upload to S3 → invalidate CloudFront
+```bash
+gh workflow run deploy-production.yml --ref main -f deploy_target=all
+```
+
+### Deployment Flow
+
+```
+Sub-repo push to main → sub-repo CI tests pass
+    → auto-triggers staging deploy (staging branch)
+        → test on staging environment
+            → when satisfied: manual production deploy (main branch)
+```
 
 ## Security
 
