@@ -106,41 +106,65 @@ jobs:
 
       - name: Deploy Frontend Stack
         run: |
+          STACK_NAME="courier-frontend-${{ env.ENVIRONMENT }}"
+          REGION="us-east-1"
           STATUS=$(aws cloudformation describe-stacks \
-            --stack-name courier-frontend-${{ env.ENVIRONMENT }} \
-            --region us-east-1 \
+            --stack-name "$STACK_NAME" --region "$REGION" \
             --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
-            echo "Stack in ROLLBACK_COMPLETE — deleting..."
-            aws cloudformation delete-stack --stack-name courier-frontend-${{ env.ENVIRONMENT }} --region us-east-1
-            aws cloudformation wait stack-delete-complete --stack-name courier-frontend-${{ env.ENVIRONMENT }} --region us-east-1
+          echo "Current stack status: $STATUS"
+          if [[ "$STATUS" == *_IN_PROGRESS ]]; then
+            echo "Stack operation in progress — waiting..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || true
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" --region "$REGION" \
+              --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          fi
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "CREATE_FAILED" ]; then
+            echo "Stack in $STATUS — deleting..."
+            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
           fi
           aws cloudformation deploy \
             --template-file infra/cloudformation/frontend-stack.yml \
-            --stack-name courier-frontend-${{ env.ENVIRONMENT }} \
+            --stack-name "$STACK_NAME" \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset \
-            --region us-east-1
+            --region "$REGION"
 
       - name: Deploy API Stack
         run: |
+          STACK_NAME="courier-api-${{ env.ENVIRONMENT }}"
+          REGION="${{ env.AWS_REGION }}"
           STATUS=$(aws cloudformation describe-stacks \
-            --stack-name courier-api-${{ env.ENVIRONMENT }} \
-            --region ${{ env.AWS_REGION }} \
+            --stack-name "$STACK_NAME" --region "$REGION" \
             --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
-            echo "Stack in ROLLBACK_COMPLETE — deleting..."
-            aws cloudformation delete-stack --stack-name courier-api-${{ env.ENVIRONMENT }} --region ${{ env.AWS_REGION }}
-            aws cloudformation wait stack-delete-complete --stack-name courier-api-${{ env.ENVIRONMENT }} --region ${{ env.AWS_REGION }}
+          echo "Current stack status: $STATUS"
+          # Wait for any in-progress operations to finish
+          if [[ "$STATUS" == *_IN_PROGRESS ]]; then
+            echo "Stack operation in progress — waiting for completion..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || true
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" --region "$REGION" \
+              --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+            echo "Stack status after wait: $STATUS"
+          fi
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "CREATE_FAILED" ]; then
+            echo "Stack in $STATUS — deleting before redeploy..."
+            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
           fi
           aws cloudformation deploy \
             --template-file infra/cloudformation/api-stack.yml \
-            --stack-name courier-api-${{ env.ENVIRONMENT }} \
+            --stack-name "$STACK_NAME" \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} DesiredCount=0 \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset \
-            --region ${{ env.AWS_REGION }}
+            --region "$REGION"
 
   # ── Deploy API (Docker → ECR → ECS) ────────────────────────────────
   deploy-api:
