@@ -89,22 +89,31 @@ jobs:
   test-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
+    needs: test-core
     strategy:
       matrix:
         node-version: [20]
     steps:
       - uses: actions/checkout@v4
         with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
           repository: nurulizyansyaza/courier-service-frontend
           ref: ${{ env.FRONTEND_REF }}
+          path: courier-service-frontend
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
+          cache-dependency-path: courier-service-frontend/package-lock.json
+      - run: cd courier-service-core && npm ci && npm run build
+      - run: cd courier-service-frontend && npm ci
       - name: Set React framework for type-checking
         run: |
+          cd courier-service-frontend
           echo '{"framework":"react"}' > framework.config.json
           node -e "
             const fs = require('fs');
@@ -113,9 +122,9 @@ jobs:
             tsconfig.include = ['src/core', 'src/react', 'src/vite-env.d.ts'];
             fs.writeFileSync('tsconfig.json', JSON.stringify(tsconfig, null, 2) + '\n');
           "
-      - run: npx tsc --noEmit
-      - run: npm test
-      - run: npm run build
+      - run: cd courier-service-frontend && npx tsc --noEmit
+      - run: cd courier-service-frontend && npm test
+      - run: cd courier-service-frontend && npm run build
 
   test-system:
     name: System Verification
