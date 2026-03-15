@@ -180,7 +180,7 @@ A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g
 
 ### CI/CD Auto-Deploy
 
-Pushing to the `staging` branch automatically:
+**Staging** (this branch) — pushing to the `staging` branch automatically:
 1. Runs all tests (core, CLI, API, frontend)
 2. Deploys/updates CloudFormation stacks
 3. Builds and pushes Docker image to ECR
@@ -188,9 +188,22 @@ Pushing to the `staging` branch automatically:
 5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
 6. Invalidates CloudFront cache
 
-The workflow also accepts **`repository_dispatch`** events (type `sub-repo-updated`), allowing sub-repos (core, CLI, API, frontend) to trigger a staging deploy when their CI passes.
+Each sub-repo has its own CI workflow. When tests pass on a sub-repo's `main` branch, it triggers the staging deploy via `gh workflow run` (requires `DEPLOY_TRIGGER_TOKEN` secret in each sub-repo).
 
-Manual deployment via GitHub Actions `workflow_dispatch` allows deploying only `api-only` or `frontend-only`.
+Manual deployment via GitHub Actions `workflow_dispatch`:
+
+```bash
+gh workflow run deploy-staging.yml --ref staging -f deploy_target=all
+```
+
+**Auto-deploy setup (for sub-repos triggering staging):**
+
+1. Create a fine-grained PAT at [github.com/settings/tokens](https://github.com/settings/tokens?type=beta):
+   - Repository access: `nurulizyansyaza/courier-service`
+   - Permissions: **Actions: Read & Write**, **Contents: Read & Write**
+2. Add the PAT as `DEPLOY_TRIGGER_TOKEN` secret in each sub-repo (Settings → Secrets → Actions)
+
+**Production** — lives on the `main` branch. Deploy manually via `deploy-production.yml`. See the main branch README for details.
 
 ### AWS Services Used
 
@@ -232,12 +245,16 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20)
 5. **test-system** — verifies CLI Problem 1/2 outputs and API cost endpoint
 
-Staging deployment (`.github/workflows/deploy-staging.yml`) runs on push to `staging`:
+Staging deployment (`.github/workflows/deploy-staging.yml`) runs on push to `staging` or via `workflow_dispatch`.
 
-1. Run all tests
-2. Deploy/update CloudFormation stacks
-3. Build & push Docker image → update ECS
-4. Build all 3 frameworks → upload to S3 → invalidate CloudFront
+### Deployment Flow
+
+```
+Sub-repo push to main → sub-repo CI tests pass
+    → auto-triggers staging deploy (staging branch)
+        → test on staging environment
+            → when satisfied: manual production deploy (main branch)
+```
 
 ## Security
 
