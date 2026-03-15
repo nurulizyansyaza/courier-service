@@ -48,9 +48,9 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
                      │         ├─ /vue/     ← Vue build                │
                      │         └─ /svelte/  ← Svelte build             │
                      │                                                  │
-  API clients ─────▶│  API Gateway (*.execute-api.*.amazonaws.com)      │
+  API clients ─────▶│  REST API Gateway (*.execute-api.*.amazonaws.com) │
                      │    ├─ WAF (rate limit, common rules)             │
-                     │    └─ VPC Link → ALB → ECS Fargate              │
+                     │    └─ VPC Link → NLB → ECS Fargate              │
                      │                          └─ Docker container     │
                      │                               (courier-api)      │
                      │                                                  │
@@ -61,7 +61,7 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 
 **No domain required** — all endpoints use AWS-generated URLs:
 - Frontend: `https://d1234567.cloudfront.net`
-- API: `https://abc123.execute-api.ap-southeast-1.amazonaws.com`
+- API: `https://abc123.execute-api.ap-southeast-1.amazonaws.com/staging`
 
 ## Setup
 
@@ -137,7 +137,7 @@ The runtime image includes:
 
 ### Step 1: Deploy Infrastructure
 
-Creates all AWS resources (S3, CloudFront, VPC, ECS, ALB, API Gateway, WAF):
+Creates all AWS resources (S3, CloudFront, VPC, ECS, NLB, REST API Gateway, WAF):
 
 ```bash
 cd courier-service
@@ -146,7 +146,7 @@ cd courier-service
 
 This deploys two CloudFormation stacks:
 - `courier-frontend-staging` — S3 + CloudFront + WAF
-- `courier-api-staging` — ECR + VPC + ECS Fargate + ALB + API Gateway + WAF
+- `courier-api-staging` — ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF
 
 ### Step 2: Deploy API
 
@@ -194,12 +194,12 @@ Manual deployment via GitHub Actions `workflow_dispatch` allows deploying only `
 |---------|---------|------|
 | **S3** | Frontend static hosting (React/Vue/Svelte builds) | Free tier: 5GB |
 | **CloudFront** | CDN + HTTPS for frontend | Free tier: 1TB/mo |
-| **API Gateway** | HTTP API proxy to ECS | Free tier: 1M calls/mo |
+| **API Gateway** | REST API proxy to ECS via VPC Link + NLB | Free tier: 1M calls/mo |
 | **ECS Fargate** | Serverless Docker container for API | ~$0.04/hr (0.25 vCPU) |
 | **ECR** | Docker image registry | Free tier: 500MB |
-| **ALB** | Load balancer for ECS tasks | ~$0.02/hr |
+| **NLB** | Network load balancer for ECS tasks (internal) | Free tier: 750 hrs/mo |
 | **WAF** | Rate limiting + managed rules (XSS, bad inputs) | ~$5/mo per WebACL |
-| **Shield Standard** | DDoS protection on CloudFront + ALB | Free |
+| **Shield Standard** | DDoS protection on CloudFront | Free |
 | **CloudWatch Logs** | Container logs (14-day retention) | Free tier: 5GB |
 
 ### Infrastructure Files
@@ -208,7 +208,7 @@ Manual deployment via GitHub Actions `workflow_dispatch` allows deploying only `
 infra/
   cloudformation/
     frontend-stack.yml   # S3 + CloudFront + WAF (CLOUDFRONT scope)
-    api-stack.yml        # ECR + VPC + ECS Fargate + ALB + API Gateway + WAF (REGIONAL)
+    api-stack.yml        # ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF (REGIONAL)
   env/
     staging.env          # Non-secret config (region, stack names)
 scripts/
@@ -253,10 +253,11 @@ Staging deployment (`.github/workflows/deploy-staging.yml`) runs on push to `sta
 | Layer | Protection |
 |-------|-----------|
 | **AWS WAF** | Rate limiting (1000-2000 req/5min per IP), managed rule sets |
-| **AWS Shield Standard** | Automatic DDoS protection (free on CloudFront + ALB) |
+| **AWS Shield Standard** | Automatic DDoS protection (free on CloudFront) |
 | **CloudFront** | HTTPS-only, TLS 1.2+, HTTP/2+3 |
-| **API Gateway** | Request throttling, payload size limits |
+| **REST API Gateway** | Request throttling, payload size limits, WAF integration |
 | **VPC** | Network isolation for ECS tasks, security groups |
+| **NLB** | Internal load balancer, no public exposure |
 | **ECR Image Scanning** | Vulnerability scanning on push |
 | **S3 OAC** | Bucket accessible only via CloudFront (no direct S3 URL) |
 
