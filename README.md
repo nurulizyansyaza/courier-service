@@ -63,8 +63,34 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 1. **test-core** — installs and tests `courier-service-core` (Node 18 + 20)
 2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20)
 3. **test-api** — installs core + API, runs API tests (Node 18 + 20)
-4. **test-frontend** — type-checks, tests, and builds the frontend (Node 18 + 20)
+4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20)
 5. **test-system** — verifies CLI Problem 1/2 outputs and API cost endpoint
+
+### Auto-Deploy to Staging
+
+Each sub-repo has its own CI workflow that runs tests on push to `main`. On success, it fires a `repository_dispatch` event to this repo, which triggers the staging deployment pipeline:
+
+```
+Sub-repo push to main
+  → Sub-repo CI runs tests
+  → Tests pass → repository_dispatch (sub-repo-updated)
+  → trigger-staging-deploy.yml (on main) receives event
+  → Triggers deploy-staging.yml on the staging branch
+  → Deploys to AWS (CloudFormation, ECS, S3, CloudFront)
+```
+
+**Setup required for auto-deploy:**
+
+1. Create a fine-grained PAT at [github.com/settings/tokens](https://github.com/settings/tokens?type=beta):
+   - Repository access: `nurulizyansyaza/courier-service`
+   - Permissions: **Actions: Read & Write**, **Contents: Read & Write**
+2. Add the PAT as `DEPLOY_TRIGGER_TOKEN` secret in each sub-repo (Settings → Secrets → Actions)
+
+Manual deployment is also available via `workflow_dispatch`:
+
+```bash
+gh workflow run deploy-staging.yml --ref staging -f deploy_target=all
+```
 
 ## Security
 
