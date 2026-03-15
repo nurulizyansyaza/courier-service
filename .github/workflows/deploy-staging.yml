@@ -137,7 +137,7 @@ jobs:
           aws cloudformation deploy \
             --template-file infra/cloudformation/api-stack.yml \
             --stack-name courier-api-${{ env.ENVIRONMENT }} \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} DesiredCount=0 \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset \
             --region ${{ env.AWS_REGION }}
@@ -216,6 +216,7 @@ jobs:
           aws ecs update-service \
             --cluster "$CLUSTER" \
             --service "$SERVICE" \
+            --desired-count 1 \
             --force-new-deployment \
             --no-cli-pager
 
