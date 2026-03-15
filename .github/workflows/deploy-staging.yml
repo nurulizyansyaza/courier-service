@@ -106,6 +106,15 @@ jobs:
 
       - name: Deploy Frontend Stack
         run: |
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name courier-frontend-${{ env.ENVIRONMENT }} \
+            --region us-east-1 \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack in ROLLBACK_COMPLETE — deleting..."
+            aws cloudformation delete-stack --stack-name courier-frontend-${{ env.ENVIRONMENT }} --region us-east-1
+            aws cloudformation wait stack-delete-complete --stack-name courier-frontend-${{ env.ENVIRONMENT }} --region us-east-1
+          fi
           aws cloudformation deploy \
             --template-file infra/cloudformation/frontend-stack.yml \
             --stack-name courier-frontend-${{ env.ENVIRONMENT }} \
@@ -116,6 +125,15 @@ jobs:
 
       - name: Deploy API Stack
         run: |
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name courier-api-${{ env.ENVIRONMENT }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack in ROLLBACK_COMPLETE — deleting..."
+            aws cloudformation delete-stack --stack-name courier-api-${{ env.ENVIRONMENT }} --region ${{ env.AWS_REGION }}
+            aws cloudformation wait stack-delete-complete --stack-name courier-api-${{ env.ENVIRONMENT }} --region ${{ env.AWS_REGION }}
+          fi
           aws cloudformation deploy \
             --template-file infra/cloudformation/api-stack.yml \
             --stack-name courier-api-${{ env.ENVIRONMENT }} \

@@ -393,8 +393,9 @@ Resources:
 
   ApiWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: ALB
     Properties:
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/apis/${HttpApi}/stages/$default
+      ResourceArn: !GetAtt ALB.LoadBalancerArn
       WebACLArn: !GetAtt ApiWebACL.Arn
 
 Outputs:
