@@ -28,14 +28,14 @@ COPY --from=build /app/courier-service-core/dist/ ./courier-service-core/dist/
 
 COPY --from=build /app/courier-service-cli/package.json ./courier-service-cli/
 COPY --from=build /app/courier-service-cli/package-lock.json ./courier-service-cli/
-RUN cd courier-service-cli && npm ci --omit=dev
+RUN cd courier-service-cli && npm ci --omit=dev --ignore-scripts
 
 COPY --from=build /app/courier-service-cli/dist/ ./courier-service-cli/dist/
 COPY --from=build /app/courier-service-cli/bin/ ./courier-service-cli/bin/
 
 COPY --from=build /app/courier-service-api/package.json ./courier-service-api/
 COPY --from=build /app/courier-service-api/package-lock.json ./courier-service-api/
-RUN cd courier-service-api && npm ci --omit=dev
+RUN cd courier-service-api && npm ci --omit=dev --ignore-scripts
 
 COPY --from=build /app/courier-service-api/dist/ ./courier-service-api/dist/
 
