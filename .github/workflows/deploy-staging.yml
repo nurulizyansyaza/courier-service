@@ -3,6 +3,8 @@ name: Deploy Staging
 on:
   push:
     branches: [staging]
+  repository_dispatch:
+    types: [sub-repo-updated]
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -308,7 +310,7 @@ jobs:
       - name: Build and deploy React
         run: |
           cd courier-service-frontend
-          npm run use:react && npm run build
+          npm run use:react && npx vite build --base=/react/
           aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/react/ \
             --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
           aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/react/index.html \
@@ -317,7 +319,7 @@ jobs:
       - name: Build and deploy Vue
         run: |
           cd courier-service-frontend
-          npm run use:vue && npm run build
+          npm run use:vue && npx vite build --base=/vue/
           aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/vue/ \
             --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
           aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/vue/index.html \
@@ -326,7 +328,7 @@ jobs:
       - name: Build and deploy Svelte
         run: |
           cd courier-service-frontend
-          npm run use:svelte && npm run build
+          npm run use:svelte && npx vite build --base=/svelte/
           aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/svelte/ \
             --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
           aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/svelte/index.html \

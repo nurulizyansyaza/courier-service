@@ -41,7 +41,7 @@ aws cloudformation deploy \
   --stack-name "$FRONTEND_STACK_NAME" \
   --parameter-overrides \
     Environment="$ENVIRONMENT" \
-    ActiveFramework="$ACTIVE_FRAMEWORK" \
+    DefaultFramework="$ACTIVE_FRAMEWORK" \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
   --region "$FRONTEND_REGION"

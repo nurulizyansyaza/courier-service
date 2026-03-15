@@ -1,20 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Courier Service Frontend — S3 static hosting + CloudFront CDN + WAF.
-  Serves React/Vue/Svelte builds from S3 prefixes; framework switching
-  is done by updating the CloudFront default root object via the
-  switch-framework.sh script.
+  Serves React/Vue/Svelte builds from S3 prefixes. All three frameworks
+  are accessible simultaneously at /<framework>/ paths. A CloudFront
+  Function handles SPA routing and root redirect.
 
 Parameters:
   Environment:
     Type: String
     Default: staging
     AllowedValues: [staging, production]
-  ActiveFramework:
+  DefaultFramework:
     Type: String
     Default: react
     AllowedValues: [react, vue, svelte]
-    Description: Which framework build to serve by default
+    Description: Framework to redirect to when visiting the root URL
 
 Resources:
   # ── WAF ──────────────────────────────────────────────────────────────
@@ -116,6 +116,35 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
+  # ── CloudFront Function (SPA routing + root redirect) ────────────────
+  SPARouterFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub courier-spa-router-${Environment}
+      AutoPublish: true
+      FunctionConfig:
+        Comment: SPA routing for multi-framework frontend
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          // Root → redirect to default framework
+          if (uri === '/' || uri === '') {
+            return {
+              statusCode: 302,
+              statusDescription: 'Found',
+              headers: { location: { value: '/${DefaultFramework}/' } }
+            };
+          }
+          // Inside a framework prefix: rewrite non-asset paths to index.html
+          var match = uri.match(/^\/(react|vue|svelte)(\/|$)/);
+          if (match && !uri.match(/\.\w{2,10}$/)) {
+            request.uri = '/' + match[1] + '/index.html';
+          }
+          return request;
+        }
+
   # ── CloudFront Distribution ─────────────────────────────────────────
   FrontendDistribution:
     Type: AWS::CloudFront::Distribution
@@ -123,13 +152,11 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: !Sub Courier Service Frontend (${Environment})
-        DefaultRootObject: index.html
         WebACLId: !GetAtt FrontendWebACL.Arn
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
             OriginAccessControlId: !Ref FrontendOAC
-            OriginPath: !Sub /${ActiveFramework}
             S3OriginConfig:
               OriginAccessIdentity: ''
         DefaultCacheBehavior:
@@ -140,16 +167,9 @@ Resources:
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
           OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf  # CORS-S3Origin
-        CustomErrorResponses:
-          # SPA fallback — serve index.html for 403/404 (client-side routing)
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 10
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 10
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SPARouterFunction.FunctionARN
         PriceClass: PriceClass_100
         HttpVersion: http2and3
 
@@ -172,6 +192,6 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-BucketName
 
-  ActiveFramework:
-    Description: Currently active frontend framework
-    Value: !Ref ActiveFramework
+  DefaultFramework:
+    Description: Default frontend framework (root URL redirects here)
+    Value: !Ref DefaultFramework

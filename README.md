@@ -1,6 +1,6 @@
 # Courier Service
 
-Orchestration repo for the **Courier Service** App Calculator. Ties together the core library, CLI app, Express API, and frontend dashboard with CI/CD, Docker, and AWS deployment.
+Orchestration repo for the **Courier Service** App Calculator. Ties together the core library, CLI app, Express API and frontend dashboard with CI/CD, Docker and AWS deployment.
 
 ## Architecture
 
@@ -59,7 +59,7 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
                      └──────────────────────────────────────────────────┘
 ```
 
-**No domain required** — all endpoints use AWS-generated URLs:
+**No dedicated domain setup as of now** — all endpoints use AWS generated URLs:
 - Frontend: `https://d1234567.cloudfront.net`
 - API: `https://abc123.execute-api.ap-southeast-1.amazonaws.com/staging`
 
@@ -164,17 +164,19 @@ Builds all 3 frameworks (React, Vue, Svelte) and uploads to S3:
 ./scripts/deploy-frontend.sh staging
 ```
 
-### Switch Frontend Framework
+### Frontend Framework Switching
 
-Switch which framework is served by CloudFront:
+All three frameworks (React, Vue, Svelte) are deployed simultaneously to S3 and served via CloudFront:
 
-```bash
-./scripts/switch-framework.sh react staging    # Switch to React
-./scripts/switch-framework.sh vue staging      # Switch to Vue
-./scripts/switch-framework.sh svelte staging   # Switch to Svelte
+```
+https://d1234567.cloudfront.net/react/   ← React build
+https://d1234567.cloudfront.net/vue/     ← Vue build
+https://d1234567.cloudfront.net/svelte/  ← Svelte build
 ```
 
-This updates the CloudFront origin path and creates a cache invalidation (~30s to propagate).
+A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g. `/react/some-path`) to the framework's `index.html`. The root URL (`/`) redirects to the default framework (configured via `DefaultFramework` parameter).
+
+**Framework switching is per-user**: each user types `use vue` or `use svelte` in their terminal UI, which navigates their browser to `/<framework>/`. Other users are unaffected.
 
 ### CI/CD Auto-Deploy
 
@@ -183,8 +185,10 @@ Pushing to the `staging` branch automatically:
 2. Deploys/updates CloudFormation stacks
 3. Builds and pushes Docker image to ECR
 4. Updates ECS Fargate service
-5. Builds all 3 frontend frameworks and uploads to S3
+5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
 6. Invalidates CloudFront cache
+
+The workflow also accepts **`repository_dispatch`** events (type `sub-repo-updated`), allowing sub-repos (core, CLI, API, frontend) to trigger a staging deploy when their CI passes.
 
 Manual deployment via GitHub Actions `workflow_dispatch` allows deploying only `api-only` or `frontend-only`.
 
@@ -207,15 +211,15 @@ Manual deployment via GitHub Actions `workflow_dispatch` allows deploying only `
 ```
 infra/
   cloudformation/
-    frontend-stack.yml   # S3 + CloudFront + WAF (CLOUDFRONT scope)
+    frontend-stack.yml   # S3 + CloudFront + CloudFront Function (SPA routing) + WAF
     api-stack.yml        # ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF (REGIONAL)
   env/
-    staging.env          # Non-secret config (region, stack names)
+    staging.env          # Non-secret config (region, stack names, default framework)
 scripts/
   deploy-infra.sh        # Deploy/update CloudFormation stacks
   deploy-api.sh          # Build Docker → push ECR → update ECS
-  deploy-frontend.sh     # Build all frameworks → S3 → invalidate CloudFront
-  switch-framework.sh    # Switch active framework via CloudFront origin path
+  deploy-frontend.sh     # Build all frameworks (--base=/<fw>/) → S3 → invalidate CloudFront
+  switch-framework.sh    # Legacy: switch framework via CloudFront origin path
 ```
 
 ## CI/CD

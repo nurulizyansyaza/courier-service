@@ -45,7 +45,7 @@ for FRAMEWORK in react vue svelte; do
   cd "$FRONTEND_DIR"
 
   npm run "use:${FRAMEWORK}"
-  npm run build
+  npx vite build --base="/${FRAMEWORK}/"
 
   echo "── Uploading $FRAMEWORK to s3://$BUCKET_NAME/$FRAMEWORK/ ──"
   aws s3 sync dist/ "s3://$BUCKET_NAME/$FRAMEWORK/" \
