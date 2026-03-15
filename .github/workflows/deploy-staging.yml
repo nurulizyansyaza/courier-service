@@ -112,7 +112,7 @@ jobs:
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset \
-            --region ${{ env.AWS_REGION }}
+            --region us-east-1
 
       - name: Deploy API Stack
         run: |
@@ -255,9 +255,9 @@ jobs:
         id: frontend-stack
         run: |
           STACK="courier-frontend-${{ env.ENVIRONMENT }}"
-          BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK" --region us-east-1 \
             --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
-          DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+          DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK" --region us-east-1 \
             --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" --output text)
           echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
           echo "dist_id=$DIST_ID" >> "$GITHUB_OUTPUT"
@@ -267,27 +267,27 @@ jobs:
           cd courier-service-frontend
           npm run use:react && npm run build
           aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/react/ \
-            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html"
+            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
           aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/react/index.html \
-            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html"
+            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html" --region us-east-1
 
       - name: Build and deploy Vue
         run: |
           cd courier-service-frontend
           npm run use:vue && npm run build
           aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/vue/ \
-            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html"
+            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
           aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/vue/index.html \
-            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html"
+            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html" --region us-east-1
 
       - name: Build and deploy Svelte
         run: |
           cd courier-service-frontend
           npm run use:svelte && npm run build
           aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/svelte/ \
-            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html"
+            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
           aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/svelte/index.html \
-            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html"
+            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html" --region us-east-1
 
       - name: Invalidate CloudFront cache
         run: |
@@ -298,6 +298,6 @@ jobs:
       - name: Print Frontend URL
         run: |
           STACK="courier-frontend-${{ env.ENVIRONMENT }}"
-          URL=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+          URL=$(aws cloudformation describe-stacks --stack-name "$STACK" --region us-east-1 \
             --query "Stacks[0].Outputs[?OutputKey=='FrontendURL'].OutputValue" --output text)
           echo "::notice::Frontend deployed to $URL"

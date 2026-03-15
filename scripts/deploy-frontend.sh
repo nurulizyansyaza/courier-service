@@ -17,6 +17,8 @@ ENVIRONMENT="${1:-staging}"
 source "$REPO_ROOT/infra/env/${ENVIRONMENT}.env"
 
 STACK_NAME="${FRONTEND_STACK_NAME}"
+# Frontend stack is deployed in us-east-1 (required for CloudFront WAF CLOUDFRONT scope)
+FRONTEND_REGION="us-east-1"
 FRONTEND_DIR="${REPO_ROOT}/../courier-service-frontend"
 
 # Get stack outputs
@@ -24,13 +26,13 @@ BUCKET_NAME=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
   --output text \
-  --region "$AWS_REGION")
+  --region "$FRONTEND_REGION")
 
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" \
   --output text \
-  --region "$AWS_REGION")
+  --region "$FRONTEND_REGION")
 
 echo "=== Deploying Frontend to S3 ==="
 echo "Bucket: $BUCKET_NAME"
@@ -48,13 +50,13 @@ for FRAMEWORK in react vue svelte; do
   echo "── Uploading $FRAMEWORK to s3://$BUCKET_NAME/$FRAMEWORK/ ──"
   aws s3 sync dist/ "s3://$BUCKET_NAME/$FRAMEWORK/" \
     --delete \
-    --region "$AWS_REGION" \
+    --region "$FRONTEND_REGION" \
     --cache-control "public, max-age=31536000, immutable" \
     --exclude "index.html"
 
   # index.html should not be cached aggressively
   aws s3 cp dist/index.html "s3://$BUCKET_NAME/$FRAMEWORK/index.html" \
-    --region "$AWS_REGION" \
+    --region "$FRONTEND_REGION" \
     --cache-control "public, max-age=0, must-revalidate" \
     --content-type "text/html"
 
@@ -67,7 +69,6 @@ echo "── Invalidating CloudFront cache ──"
 aws cloudfront create-invalidation \
   --distribution-id "$DISTRIBUTION_ID" \
   --paths "/*" \
-  --region "$AWS_REGION" \
   --no-cli-pager
 
 echo ""
@@ -76,5 +77,5 @@ FRONTEND_URL=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendURL'].OutputValue" \
   --output text \
-  --region "$AWS_REGION")
+  --region "$FRONTEND_REGION")
 echo "URL: $FRONTEND_URL"

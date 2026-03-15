@@ -22,12 +22,14 @@ if [[ "$FRAMEWORK" != "react" && "$FRAMEWORK" != "vue" && "$FRAMEWORK" != "svelt
 fi
 
 STACK_NAME="${FRONTEND_STACK_NAME}"
+# Frontend stack is deployed in us-east-1 (required for CloudFront WAF)
+FRONTEND_REGION="us-east-1"
 
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" \
   --output text \
-  --region "$AWS_REGION")
+  --region "$FRONTEND_REGION")
 
 echo "=== Switching to $FRAMEWORK ==="
 echo "Distribution: $DISTRIBUTION_ID"
@@ -35,12 +37,10 @@ echo "Distribution: $DISTRIBUTION_ID"
 # Get current config
 ETAG=$(aws cloudfront get-distribution-config \
   --id "$DISTRIBUTION_ID" \
-  --region "$AWS_REGION" \
   --query "ETag" --output text)
 
 aws cloudfront get-distribution-config \
   --id "$DISTRIBUTION_ID" \
-  --region "$AWS_REGION" \
   --query "DistributionConfig" > /tmp/cf-dist-config.json
 
 # Update origin path to the selected framework
@@ -58,14 +58,12 @@ aws cloudfront update-distribution \
   --id "$DISTRIBUTION_ID" \
   --distribution-config "file:///tmp/cf-dist-config.json" \
   --if-match "$ETAG" \
-  --region "$AWS_REGION" \
   --no-cli-pager > /dev/null
 
 # Invalidate cache so the switch takes effect immediately
 aws cloudfront create-invalidation \
   --distribution-id "$DISTRIBUTION_ID" \
   --paths "/*" \
-  --region "$AWS_REGION" \
   --no-cli-pager > /dev/null
 
 rm -f /tmp/cf-dist-config.json
@@ -76,5 +74,5 @@ FRONTEND_URL=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendURL'].OutputValue" \
   --output text \
-  --region "$AWS_REGION")
+  --region "$FRONTEND_REGION")
 echo "URL: $FRONTEND_URL"

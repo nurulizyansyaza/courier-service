@@ -23,7 +23,7 @@ echo ""
 # If your AWS_REGION is not us-east-1, you have two options:
 #   1. Deploy the frontend stack to us-east-1
 #   2. Change the WAF scope to REGIONAL and remove it from CloudFront
-echo "── Deploying Frontend Stack ──"
+echo "── Deploying Frontend Stack (us-east-1, required for CloudFront WAF) ──"
 aws cloudformation deploy \
   --template-file "$REPO_ROOT/infra/cloudformation/frontend-stack.yml" \
   --stack-name "$FRONTEND_STACK_NAME" \
@@ -32,13 +32,13 @@ aws cloudformation deploy \
     ActiveFramework="$ACTIVE_FRAMEWORK" \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
-  --region us-east-1
+  --region "$FRONTEND_REGION"
 
 FRONTEND_URL=$(aws cloudformation describe-stacks \
   --stack-name "$FRONTEND_STACK_NAME" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendURL'].OutputValue" \
   --output text \
-  --region us-east-1)
+  --region "$FRONTEND_REGION")
 echo "✓ Frontend: $FRONTEND_URL"
 echo ""
 
