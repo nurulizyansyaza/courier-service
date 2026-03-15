@@ -307,7 +307,7 @@ Resources:
       Integration:
         Type: HTTP_PROXY
         IntegrationHttpMethod: ANY
-        Uri: !Sub http://${NLB.DNSName}:${ContainerPort}/{proxy}
+        Uri: !Sub http://${NLB.DNSName}/{proxy}
         ConnectionType: VPC_LINK
         ConnectionId: !Ref VpcLink
         RequestParameters:
@@ -326,7 +326,7 @@ Resources:
       Integration:
         Type: HTTP_PROXY
         IntegrationHttpMethod: ANY
-        Uri: !Sub http://${NLB.DNSName}:${ContainerPort}/
+        Uri: !Sub http://${NLB.DNSName}/
         ConnectionType: VPC_LINK
         ConnectionId: !Ref VpcLink
         IntegrationResponses:
