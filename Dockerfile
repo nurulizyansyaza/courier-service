@@ -3,17 +3,17 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY courier-service-core/package*.json ./courier-service-core/
-RUN cd courier-service-core && npm ci
+RUN cd courier-service-core && npm ci --ignore-scripts
 COPY courier-service-core/ ./courier-service-core/
 RUN cd courier-service-core && npm run build
 
 COPY courier-service-cli/package*.json ./courier-service-cli/
-RUN cd courier-service-cli && npm ci
+RUN cd courier-service-cli && npm ci --ignore-scripts
 COPY courier-service-cli/ ./courier-service-cli/
 RUN cd courier-service-cli && npx tsc
 
 COPY courier-service-api/package*.json ./courier-service-api/
-RUN cd courier-service-api && npm ci
+RUN cd courier-service-api && npm ci --ignore-scripts
 COPY courier-service-api/ ./courier-service-api/
 RUN cd courier-service-api && npm run build
 
