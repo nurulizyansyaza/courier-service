@@ -21,6 +21,8 @@ RUN cd courier-service-api && npm run build
 FROM node:20-alpine
 WORKDIR /app
 
+RUN apk add --no-cache wget
+
 COPY --from=build /app/courier-service-core/package.json ./courier-service-core/
 COPY --from=build /app/courier-service-core/dist/ ./courier-service-core/dist/
 
@@ -36,3 +38,12 @@ COPY --from=build /app/courier-service-api/package-lock.json ./courier-service-a
 RUN cd courier-service-api && npm ci --omit=dev
 
 COPY --from=build /app/courier-service-api/dist/ ./courier-service-api/dist/
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
+
+CMD ["node", "courier-service-api/dist/index.js"]
