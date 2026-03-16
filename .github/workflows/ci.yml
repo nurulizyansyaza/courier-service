@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 env:
-  CORE_REF: issue_2-NPM_Package
-  CLI_REF: issue_3-CLI_App
-  API_REF: issue_4-Expressjs_API
-  FRONTEND_REF: issue_5-React_Dashboard
+  CORE_REF: main
+  CLI_REF: main
+  API_REF: main
+  FRONTEND_REF: main
 
 jobs:
   test-core:
