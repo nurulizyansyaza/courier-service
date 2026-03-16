@@ -26,6 +26,77 @@ graph LR
 - **Frontend → Core**: Fallback when API is unreachable. Calculations run client-side.
 - **CLI → Core**: Standalone. CLI reads stdin and outputs results directly.
 
+### Cost Calculation Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User (Terminal UI)
+    participant FE as Frontend
+    participant API as Express API
+    participant Core as Core Library
+
+    U->>FE: Enter package data + "cost"
+    FE->>API: POST /api/cost { input }
+
+    alt API available
+        API->>API: Zod validation + rate limit
+        API->>Core: parseInput(input, 'cost')
+        Core-->>API: { baseCost, packages[] }
+        loop Each package
+            API->>Core: calculatePackageCost(pkg, baseCost)
+            Core->>Core: deliveryCost = base + (weight×10) + (distance×5)
+            Core->>Core: findBestOffer(weight, distance)
+            Core-->>API: { discount, totalCost }
+        end
+        API-->>FE: { results: [{ id, discount, cost }] }
+    else API unavailable (fallback)
+        FE->>Core: calculateDeliveryCost(input)
+        Core-->>FE: "PKG1 0 175\nPKG2 35 665"
+    end
+
+    FE->>Core: parseOutput(output, 'cost', input)
+    Core-->>FE: ParsedResult[]
+    FE-->>U: Display results table
+```
+
+### Delivery Time Calculation Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User (Terminal UI)
+    participant FE as Frontend
+    participant API as Express API
+    participant Core as Core Library
+
+    U->>FE: Enter packages + vehicles + "time"
+    FE->>API: POST /api/delivery/transit { input, transitPackages }
+
+    alt API available
+        API->>Core: calculateDeliveryTimeWithTransit(input, transit)
+        Core->>Core: parseInput(input, 'time')
+        Core->>Core: resolveTransitConflicts()
+        Core->>Core: Enrich packages with cost data
+        Core->>Core: Sort by weight ↓ then distance ↑
+
+        loop While packages remain
+            Core->>Core: Find least-busy vehicle
+            Core->>Core: findBestShipment (knapsack ≤20 / greedy >20)
+            Core->>Core: deliveryTime = currentTime + distance/speed
+            Core->>Core: vehicleReturn = currentTime + 2×(maxDist/speed)
+        end
+
+        Core-->>API: DetailedDeliveryResult[]
+        API-->>FE: { output, stillInTransit, newTransitPackages }
+    else API unavailable (fallback)
+        FE->>Core: calculateDeliveryTimeWithTransit(input, transit)
+        Core-->>FE: Same calculation locally
+    end
+
+    FE->>Core: parseOutput(output, 'time', input)
+    Core-->>FE: ParsedResult[] with time/vehicle/round
+    FE-->>U: Display results with delivery times
+```
+
 ### AWS Staging / Production Architecture
 
 ```mermaid
