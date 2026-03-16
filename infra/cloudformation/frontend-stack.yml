@@ -15,6 +15,16 @@ Parameters:
     Default: react
     AllowedValues: [react, vue, svelte]
     Description: Framework to redirect to when visiting the root URL
+  ApiGatewayDomain:
+    Type: String
+    Default: ''
+    Description: >
+      API Gateway execute-api domain for proxying /api/* requests
+      (e.g., abc123.execute-api.ap-southeast-1.amazonaws.com).
+      Leave empty to skip API proxy setup.
+
+Conditions:
+  HasApiGateway: !Not [!Equals [!Ref ApiGatewayDomain, '']]
 
 Resources:
   # ── WAF ──────────────────────────────────────────────────────────────
@@ -159,6 +169,17 @@ Resources:
             OriginAccessControlId: !Ref FrontendOAC
             S3OriginConfig:
               OriginAccessIdentity: ''
+          - !If
+            - HasApiGateway
+            - Id: ApiOrigin
+              DomainName: !Ref ApiGatewayDomain
+              OriginPath: !Sub /${Environment}
+              CustomOriginConfig:
+                OriginProtocolPolicy: https-only
+                HTTPSPort: 443
+                OriginSSLProtocols:
+                  - TLSv1.2
+            - !Ref AWS::NoValue
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -170,6 +191,18 @@ Resources:
           FunctionAssociations:
             - EventType: viewer-request
               FunctionARN: !GetAtt SPARouterFunction.FunctionARN
+        CacheBehaviors:
+          !If
+            - HasApiGateway
+            - - PathPattern: /api/*
+                TargetOriginId: ApiOrigin
+                ViewerProtocolPolicy: redirect-to-https
+                AllowedMethods: [DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT]
+                CachedMethods: [GET, HEAD]
+                Compress: true
+                CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+                OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # AllViewerExceptHostHeader
+            - !Ref AWS::NoValue
         PriceClass: PriceClass_100
         HttpVersion: http2and3
 

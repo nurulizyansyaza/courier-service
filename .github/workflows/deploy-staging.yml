@@ -104,36 +104,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy Frontend Stack
-        run: |
-          STACK_NAME="courier-frontend-${{ env.ENVIRONMENT }}"
-          REGION="us-east-1"
-          STATUS=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" --region "$REGION" \
-            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-          echo "Current stack status: $STATUS"
-          if [[ "$STATUS" == *_IN_PROGRESS ]]; then
-            echo "Stack operation in progress — waiting..."
-            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
-              || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
-              || true
-            STATUS=$(aws cloudformation describe-stacks \
-              --stack-name "$STACK_NAME" --region "$REGION" \
-              --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-          fi
-          if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "CREATE_FAILED" ]; then
-            echo "Stack in $STATUS — deleting..."
-            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
-            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
-          fi
-          aws cloudformation deploy \
-            --template-file infra/cloudformation/frontend-stack.yml \
-            --stack-name "$STACK_NAME" \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset \
-            --region "$REGION"
-
       - name: Deploy API Stack
         run: |
           STACK_NAME="courier-api-${{ env.ENVIRONMENT }}"
@@ -162,6 +132,56 @@ jobs:
             --template-file infra/cloudformation/api-stack.yml \
             --stack-name "$STACK_NAME" \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} DesiredCount=0 \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --region "$REGION"
+
+      - name: Get API Gateway domain
+        id: api-domain
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name "courier-api-${{ env.ENVIRONMENT }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiGatewayURL'].OutputValue" \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$API_URL" ] && [ "$API_URL" != "None" ]; then
+            API_DOMAIN=$(echo "$API_URL" | sed 's|https://||' | cut -d'/' -f1)
+            echo "domain=$API_DOMAIN" >> "$GITHUB_OUTPUT"
+            echo "API Gateway domain: $API_DOMAIN"
+          else
+            echo "No API Gateway found — skipping API proxy setup"
+          fi
+
+      - name: Deploy Frontend Stack
+        run: |
+          STACK_NAME="courier-frontend-${{ env.ENVIRONMENT }}"
+          REGION="us-east-1"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" --region "$REGION" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          echo "Current stack status: $STATUS"
+          if [[ "$STATUS" == *_IN_PROGRESS ]]; then
+            echo "Stack operation in progress — waiting..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || true
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" --region "$REGION" \
+              --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          fi
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "CREATE_FAILED" ]; then
+            echo "Stack in $STATUS — deleting..."
+            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
+          fi
+          PARAMS="Environment=${{ env.ENVIRONMENT }}"
+          if [ -n "${{ steps.api-domain.outputs.domain }}" ]; then
+            PARAMS="$PARAMS ApiGatewayDomain=${{ steps.api-domain.outputs.domain }}"
+          fi
+          aws cloudformation deploy \
+            --template-file infra/cloudformation/frontend-stack.yml \
+            --stack-name "$STACK_NAME" \
+            --parameter-overrides $PARAMS \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset \
             --region "$REGION"

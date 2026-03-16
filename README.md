@@ -178,6 +178,17 @@ A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g
 
 **Framework switching is per-user**: each user types `use vue` or `use svelte` in their terminal UI, which navigates their browser to `/<framework>/`. Other users are unaffected.
 
+### API Proxy via CloudFront
+
+The CloudFront distribution proxies `/api/*` requests to the API Gateway, so the frontend uses simple relative URLs (`/api/cost`, `/api/delivery/transit`) in both dev and production:
+
+| Environment | `/api/*` routing |
+|---|---|
+| Dev (Vite) | Vite proxy → `http://localhost:3000` |
+| Staging/Production | CloudFront → API Gateway → NLB → ECS Fargate |
+
+This is configured via the `ApiGatewayDomain` parameter in `frontend-stack.yml`. The deploy workflow automatically extracts the API Gateway domain from the API stack outputs and passes it to the frontend stack. If no API Gateway is available, the parameter defaults to empty and the proxy behavior is skipped (frontend falls back to local calculation via the core library).
+
 ### CI/CD Auto-Deploy
 
 **Staging** (this branch) — pushing to the `staging` branch automatically:
