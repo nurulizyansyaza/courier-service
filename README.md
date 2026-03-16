@@ -188,7 +188,7 @@ A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g
 5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
 6. Invalidates CloudFront cache
 
-Each sub-repo has its own CI workflow. When tests pass on a sub-repo's `main` branch, it triggers the staging deploy via `gh workflow run` (requires `DEPLOY_TRIGGER_TOKEN` secret in each sub-repo).
+All sub-repos are checked out from their `main` branch for staging builds. Each sub-repo has its own CI workflow — when tests pass on a sub-repo's `main` branch, it automatically triggers the staging deploy via `gh workflow run` (requires `DEPLOY_TRIGGER_TOKEN` secret in each sub-repo).
 
 Manual deployment via GitHub Actions `workflow_dispatch`:
 
@@ -203,7 +203,11 @@ gh workflow run deploy-staging.yml --ref staging -f deploy_target=all
    - Permissions: **Actions: Read & Write**, **Contents: Read & Write**
 2. Add the PAT as `DEPLOY_TRIGGER_TOKEN` secret in each sub-repo (Settings → Secrets → Actions)
 
-**Production** — lives on the `main` branch. Deploy manually via `deploy-production.yml`. See the main branch README for details.
+**Production** — lives on the `main` branch. Once staging is verified, merge `staging` → `main` and deploy manually via `deploy-production.yml`:
+
+```bash
+gh workflow run deploy-production.yml --ref main -f deploy_target=all
+```
 
 ### AWS Services Used
 
