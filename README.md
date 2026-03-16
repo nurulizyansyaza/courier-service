@@ -186,7 +186,7 @@ A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g
 gh workflow run deploy-production.yml --ref main -f deploy_target=all
 ```
 
-This deploys to separate CloudFormation stacks (`courier-frontend-production`, `courier-api-production`) on the same AWS account as staging.
+This deploys to separate CloudFormation stacks (`courier-frontend-production`, `courier-api-production`) on the same AWS account as staging. All sub-repos are checked out from their `main` branch.
 
 1. Runs all tests (core, CLI, API, frontend)
 2. Deploys/updates CloudFormation stacks
@@ -195,7 +195,7 @@ This deploys to separate CloudFormation stacks (`courier-frontend-production`, `
 5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
 6. Invalidates CloudFront cache
 
-**Staging** — lives on the `staging` branch. Sub-repo CI auto-triggers staging deploys via `gh workflow run`. See the staging branch README for details.
+**Staging** — lives on the `staging` branch. Sub-repo CI auto-triggers staging deploys (from sub-repo `main` branches) via `gh workflow run`. Once staging is verified, merge `staging` → `main` and deploy production manually. See the staging branch README for details.
 
 ### AWS Services Used
 
