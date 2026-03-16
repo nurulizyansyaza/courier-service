@@ -14,20 +14,12 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 
 ### How They Connect
 
-```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│  Frontend    │────▶│   API       │────▶│   Core       │
-│ (Vite SPA)  │proxy│ (Express)   │     │ (TS Library) │
-└─────────────┘     └─────────────┘     └──────────────┘
-                                              ▲    ▲
-┌─────────────┐                               │    │
-│   CLI       │───────────────────────────────┘    │
-│ (Commander) │                                     │
-└─────────────┘                                     │
-                    ┌─────────────┐                  │
-                    │  Frontend   │─── local fallback┘
-                    │ (offline)   │
-                    └─────────────┘
+```mermaid
+graph LR
+    Frontend["Frontend<br/>(Vite SPA)"] -->|"/api/* proxy"| API["API<br/>(Express)"]
+    API --> Core["Core<br/>(TS Library)"]
+    CLI["CLI<br/>(Commander)"] --> Core
+    Frontend -.->|"local fallback"| Core
 ```
 
 - **Frontend → API → Core**: Primary path. API provides rate limiting, validation, and security headers.
@@ -36,44 +28,58 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 
 ### AWS Staging / Production Architecture
 
-```
-                     ┌──────────────────────────────────────────────────┐
-                     │              AWS Cloud                           │
-                     │                                                  │
-  Browser ─────────▶│  CloudFront (d*.cloudfront.net)                   │
-                     │    ├─ WAF (rate limit, XSS, bad inputs)          │
-                     │    ├─ Shield Standard (DDoS, free)               │
-                     │    ├─ /api/* → API Gateway origin (proxy)        │
-                     │    └─ /* → S3 Origin (static files)              │
-                     │         ├─ /react/   ← React build              │
-                     │         ├─ /vue/     ← Vue build                │
-                     │         └─ /svelte/  ← Svelte build             │
-                     │                                                  │
-                     │  REST API Gateway (*.execute-api.*.amazonaws.com) │
-                     │    ├─ WAF (rate limit, common rules)             │
-                     │    └─ VPC Link → NLB → ECS Fargate              │
-                     │                          └─ Docker container     │
-                     │                               (courier-api)      │
-                     │                                                  │
-                     │  ECR ← Docker images (auto-scanned)              │
-                     │  CloudWatch ← Container logs (14-day retention)  │
-                     └──────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    Browser["🌐 Browser"] --> CF["CloudFront CDN<br/>+ Shield Standard"]
+
+    subgraph AWS["AWS Cloud"]
+        CF --> WAF_CF["WAF · Rate limit · XSS · Bad inputs"]
+        WAF_CF --> S3Route["/* → S3 Origin"]
+        WAF_CF --> ApiRoute["/api/* → API Gateway"]
+
+        S3Route --> S3["S3 Bucket"]
+        S3 --> React["/react/"]
+        S3 --> Vue["/vue/"]
+        S3 --> Svelte["/svelte/"]
+
+        ApiRoute --> APIGW["REST API Gateway"]
+        APIGW --> WAF_API["WAF · Rate limit · Common rules"]
+        WAF_API --> VPCLink["VPC Link"]
+        VPCLink --> NLB["NLB (internal)"]
+        NLB --> ECS["ECS Fargate<br/>Docker container"]
+
+        ECR["ECR"] -.->|"image"| ECS
+        ECS -.->|"logs"| CW["CloudWatch<br/>14-day retention"]
+    end
 ```
 
-**No dedicated domain setup as of now** — all endpoints use AWS generated URLs:
-- Frontend: `https://d1234567.cloudfront.net`
-- API (direct): `https://abc123.execute-api.ap-southeast-1.amazonaws.com/production`
-- API (via CloudFront proxy): `https://d1234567.cloudfront.net/api/*`
+**Endpoints** — no custom domain; all use AWS-generated URLs:
+
+| Environment | Frontend | API (direct) | API (via CloudFront) |
+|---|---|---|---|
+| **Production** | [`d31r5a2wvtwynh.cloudfront.net`](https://d31r5a2wvtwynh.cloudfront.net) | `r7b86qfm3h.execute-api.ap-southeast-1.amazonaws.com/production` | `d31r5a2wvtwynh.cloudfront.net/api/*` |
+| **Staging** | [`d28gbmf77bx81u.cloudfront.net`](https://d28gbmf77bx81u.cloudfront.net) | `r7b86qfm3h.execute-api.ap-southeast-1.amazonaws.com/staging` | `d28gbmf77bx81u.cloudfront.net/api/*` |
 
 ### API Proxy via CloudFront
 
 The frontend uses relative `/api/*` URLs for API calls. CloudFront proxies these requests to API Gateway, so the same relative URLs work identically in development (Vite proxy) and production (CloudFront proxy):
 
-```
-Browser → CloudFront /api/cost
-       → API Gateway (abc123.execute-api.ap-southeast-1.amazonaws.com)
-       → OriginPath: /production
-       → VPC Link → NLB → ECS Fargate (port 3000)
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant CF as CloudFront
+    participant AG as API Gateway
+    participant NLB as NLB
+    participant ECS as ECS Fargate
+
+    B->>CF: POST /api/cost
+    CF->>AG: Forward (OriginPath: /production)
+    AG->>NLB: VPC Link
+    NLB->>ECS: TCP :3000
+    ECS-->>NLB: JSON response
+    NLB-->>AG: Response
+    AG-->>CF: Response
+    CF-->>B: JSON result
 ```
 
 Configuration:
@@ -188,9 +194,9 @@ Builds all 3 frameworks (React, Vue, Svelte) and uploads to S3:
 All three frameworks (React, Vue, Svelte) are deployed simultaneously to S3 and served via CloudFront:
 
 ```
-https://d1234567.cloudfront.net/react/   ← React build
-https://d1234567.cloudfront.net/vue/     ← Vue build
-https://d1234567.cloudfront.net/svelte/  ← Svelte build
+https://d31r5a2wvtwynh.cloudfront.net/react/   ← React build
+https://d31r5a2wvtwynh.cloudfront.net/vue/     ← Vue build
+https://d31r5a2wvtwynh.cloudfront.net/svelte/  ← Svelte build
 ```
 
 A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g. `/react/some-path`) to the framework's `index.html`. The root URL (`/`) redirects to the default framework (configured via `DefaultFramework` parameter).
@@ -264,11 +270,12 @@ gh workflow run deploy-production.yml --ref main -f deploy_target=all
 
 ### Deployment Flow
 
-```
-Sub-repo push to main → sub-repo CI tests pass
-    → auto-triggers staging deploy (staging branch)
-        → test on staging environment
-            → when satisfied: manual production deploy (main branch)
+```mermaid
+graph LR
+    Push["Push to sub-repo<br/>main branch"] --> CI["Sub-repo CI<br/>tests pass"]
+    CI -->|"auto-trigger"| Staging["Deploy Staging<br/>(staging branch)"]
+    Staging --> Test["Test on staging"]
+    Test -->|"manual dispatch"| Prod["Deploy Production<br/>(main branch)"]
 ```
 
 ## Security
