@@ -24,6 +24,7 @@ graph LR
 
 - **Frontend → API → Core**: Primary path. API provides rate limiting, validation, and security headers.
 - **Frontend → Core**: Fallback when API is unreachable. Calculations run client-side.
+- **CLI → API → Core**: CLI tries API first (if `apiUrl` configured), falls back to local core.
 - **CLI → Core**: Standalone. CLI reads stdin and outputs results directly.
 
 ### Cost Calculation Flow
@@ -86,7 +87,7 @@ sequenceDiagram
         end
 
         Core-->>API: DetailedDeliveryResult[]
-        API-->>FE: { output, stillInTransit, newTransitPackages }
+        API-->>FE: { output, results[], stillInTransit, newTransitPackages }
     else API unavailable (fallback)
         FE->>Core: calculateDeliveryTimeWithTransit(input, transit)
         Core-->>FE: Same calculation locally
@@ -375,9 +376,25 @@ graph LR
 | **ECR Image Scanning** | Vulnerability scanning on push |
 | **S3 OAC** | Bucket accessible only via CloudFront (no direct S3 URL) |
 
+## Shared Dependency Model
+
+All three consumer packages depend on `@nurulizyansyaza/courier-service-core` via `file:../courier-service-core`:
+
+```
+courier-service-core (source of truth)
+  ├── courier-service-api    → direct import, no fallback needed
+  ├── courier-service-cli    → API-first + local core fallback
+  └── courier-service-frontend → API-first + local core fallback
+```
+
+- **Zero logic duplication** — parsing, cost calculation, delivery planning, and offer validation all live in core
+- **API-first with fallback** — CLI and frontend try the API first; if unreachable, run the same core functions locally
+- When core is updated, all consumers get the changes after `npm ci` / rebuild
+- CI builds core first, then runs downstream tests to catch breaking changes
+
 ## Related Repos
 
-- [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core) — Core logic NPM package
-- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application
-- [courier-service-api](https://github.com/nurulizyansyaza/courier-service-api) — Express REST API
-- [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend) — Frontend dashboard
+- [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core) — Core logic NPM package (123 tests)
+- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application with Ink TUI (32 tests)
+- [courier-service-api](https://github.com/nurulizyansyaza/courier-service-api) — Express REST API with Bruno test collection
+- [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend) — React/Vue/Svelte dashboard (243 tests)
