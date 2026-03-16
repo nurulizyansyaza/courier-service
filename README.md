@@ -18,7 +18,7 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 graph LR
     Frontend["Frontend<br/>(Vite SPA)"] -->|"/api/* proxy"| API["API<br/>(Express)"]
     API --> Core["Core<br/>(TS Library)"]
-    CLI["CLI<br/>(Commander)"] --> Core
+    CLI["CLI<br/>(Commander + Ink)"] --> Core
     Frontend -.->|"local fallback"| Core
 ```
 
@@ -87,7 +87,7 @@ sequenceDiagram
         end
 
         Core-->>API: DetailedDeliveryResult[]
-        API-->>FE: { output, results[], stillInTransit, newTransitPackages }
+        API-->>FE: { output, results[], clearedFromTransit, stillInTransit, newTransitPackages, renamedPackages }
     else API unavailable (fallback)
         FE->>Core: calculateDeliveryTimeWithTransit(input, transit)
         Core-->>FE: Same calculation locally
