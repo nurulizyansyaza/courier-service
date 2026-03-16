@@ -43,12 +43,13 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
   Browser ─────────▶│  CloudFront (d*.cloudfront.net)                   │
                      │    ├─ WAF (rate limit, XSS, bad inputs)          │
                      │    ├─ Shield Standard (DDoS, free)               │
-                     │    └─ S3 Origin                                  │
+                     │    ├─ /api/* → API Gateway origin (proxy)        │
+                     │    └─ /* → S3 Origin (static files)              │
                      │         ├─ /react/   ← React build              │
                      │         ├─ /vue/     ← Vue build                │
                      │         └─ /svelte/  ← Svelte build             │
                      │                                                  │
-  API clients ─────▶│  REST API Gateway (*.execute-api.*.amazonaws.com) │
+                     │  REST API Gateway (*.execute-api.*.amazonaws.com) │
                      │    ├─ WAF (rate limit, common rules)             │
                      │    └─ VPC Link → NLB → ECS Fargate              │
                      │                          └─ Docker container     │
@@ -61,7 +62,25 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 
 **No dedicated domain setup as of now** — all endpoints use AWS generated URLs:
 - Frontend: `https://d1234567.cloudfront.net`
-- API: `https://abc123.execute-api.ap-southeast-1.amazonaws.com/production`
+- API (direct): `https://abc123.execute-api.ap-southeast-1.amazonaws.com/production`
+- API (via CloudFront proxy): `https://d1234567.cloudfront.net/api/*`
+
+### API Proxy via CloudFront
+
+The frontend uses relative `/api/*` URLs for API calls. CloudFront proxies these requests to API Gateway, so the same relative URLs work identically in development (Vite proxy) and production (CloudFront proxy):
+
+```
+Browser → CloudFront /api/cost
+       → API Gateway (abc123.execute-api.ap-southeast-1.amazonaws.com)
+       → OriginPath: /production
+       → VPC Link → NLB → ECS Fargate (port 3000)
+```
+
+Configuration:
+- **ApiGatewayDomain** parameter passed to `frontend-stack.yml` during deploy
+- **CachingDisabled** policy on `/api/*` — API responses are never cached
+- **AllViewerExceptHostHeader** origin request policy — forwards all headers except Host
+- If no API Gateway domain is provided, the proxy origin is skipped (conditional via `HasApiGateway`)
 
 ## Setup
 
@@ -216,7 +235,7 @@ This deploys to separate CloudFormation stacks (`courier-frontend-production`, `
 ```
 infra/
   cloudformation/
-    frontend-stack.yml   # S3 + CloudFront + CloudFront Function (SPA routing) + WAF
+    frontend-stack.yml   # S3 + CloudFront + CloudFront Function (SPA routing) + API proxy origin + WAF
     api-stack.yml        # ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF (REGIONAL)
   env/
     production.env       # Production config (region, stack names, default framework)
