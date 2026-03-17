@@ -111,62 +111,136 @@ A courier service calculator that solves two problems:
 
 ### Prerequisites
 
-- **Node.js** 18 or 20 (recommended: 20)
-- **npm** (comes with Node.js)
-- **Git**
-- **Docker** (optional — for one command dev setup)
+Before you start, make sure you have these installed on your machine:
 
-### Step 1 — Clone all repos
+| Tool | Version | How to check | How to install |
+|---|---|---|---|
+| **Node.js** | 18 or 20 (recommended: 20) | `node --version` | [nodejs.org](https://nodejs.org/) |
+| **npm** | Comes with Node.js | `npm --version` | Installed with Node.js |
+| **Git** | Any recent version | `git --version` | [git-scm.com](https://git-scm.com/) |
+| **Docker** | Any recent version (optional) | `docker --version` | [docker.com](https://www.docker.com/products/docker-desktop/) |
+
+> **Tip:** If you see a version number when running the check commands above, you're good to go.
+
+---
+
+### Option A — Manual Setup (step by step)
+
+#### Step 1 — Create a project folder
+
+Open your terminal and create a folder to hold all the repos:
 
 ```bash
-mkdir courier-service-project && cd courier-service-project
+mkdir courier-service-project
+cd courier-service-project
+```
 
+#### Step 2 — Clone all repos
+
+Clone each repo one by one into the project folder:
+
+```bash
 git clone https://github.com/nurulizyansyaza/courier-service.git
 git clone https://github.com/nurulizyansyaza/courier-service-core.git
-git clone https://github.com/nurulizyansyaza/courier-service-cli.git
 git clone https://github.com/nurulizyansyaza/courier-service-api.git
+git clone https://github.com/nurulizyansyaza/courier-service-cli.git
 git clone https://github.com/nurulizyansyaza/courier-service-frontend.git
 ```
 
-### Step 2 — Install and build
+After this step, your folder should look like:
 
-```bash
-# Build the core library first (other repos depend on it)
-cd courier-service-core && npm ci && npm run build && cd ..
-
-# Install the rest
-cd courier-service-api && npm ci && npm run build && cd ..
-cd courier-service-cli && npm ci && cd ..
-cd courier-service-frontend && npm ci && cd ..
+```
+courier-service-project/
+├── courier-service/           ← main repo (CI/CD, Docker, infra)
+├── courier-service-core/      ← shared core library
+├── courier-service-api/       ← REST API
+├── courier-service-cli/       ← interactive CLI
+└── courier-service-frontend/  ← web dashboard
 ```
 
-### Alternative — Docker Dev Setup
+#### Step 3 — Build the core library first
 
-If you have **Docker** installed, you can skip the manual setup and run everything with one command:
+The core library must be built **before** anything else — all other repos depend on it.
+
+```bash
+cd courier-service-core
+npm ci
+npm run build
+```
+
+You should see a `dist/` folder created. Then go back to the project root:
+
+```bash
+cd ..
+```
+
+#### Step 4 — Install and build the API
+
+```bash
+cd courier-service-api
+npm ci
+npm run build
+cd ..
+```
+
+#### Step 5 — Install the CLI
+
+```bash
+cd courier-service-cli
+npm ci
+cd ..
+```
+
+#### Step 6 — Install the frontend
+
+```bash
+cd courier-service-frontend
+npm ci
+cd ..
+```
+
+**Done!** Everything is installed. You can now run the app (see [How to Run the App](#how-to-run-the-app) below).
+
+---
+
+### Option B — Docker Dev Setup (one command)
+
+If you have Docker installed, you can skip all the manual steps above:
+
+#### Step 1 — Clone all repos
+
+Same as Option A Steps 1 and 2 above.
+
+#### Step 2 — Start everything
 
 ```bash
 cd courier-service
 docker compose -f docker-compose.dev.yml up
 ```
 
-This starts:
+Wait for the output to show all services are running. This starts:
+
 - **Core** — watches for changes and rebuilds automatically
-- **API** — Express server on `http://localhost:3000` (auto-restarts on change)
+- **API** — Express server on `http://localhost:3000`
 - **Frontend** — Vite dev server on `http://localhost:5173` (hot module replacement)
 
-**Run the CLI:**
+#### Run the CLI in Docker
+
+Open a new terminal window:
 
 ```bash
+cd courier-service
 docker compose -f docker-compose.dev.yml run --rm cli
 ```
 
-**Run all 541 tests:**
+#### Run all tests in Docker
 
 ```bash
+cd courier-service
 docker compose -f docker-compose.dev.yml run --rm test
 ```
 
-**Run tests for a specific repo:**
+#### Run tests for a specific repo
 
 ```bash
 docker compose -f docker-compose.dev.yml run --rm test-core
@@ -175,30 +249,40 @@ docker compose -f docker-compose.dev.yml run --rm test-cli
 docker compose -f docker-compose.dev.yml run --rm test-fe
 ```
 
-**Port conflicts?** Ports are configurable:
+#### Port already in use?
+
+If you see an error like `port is already in use`, change the port:
 
 ```bash
 API_PORT=3001 FE_PORT=5174 docker compose -f docker-compose.dev.yml up
 ```
 
-**Stop everything:**
+#### Stop everything
 
 ```bash
 docker compose -f docker-compose.dev.yml down
 ```
 
-> **Note:** Source files are mounted as volumes — edit code locally and changes are picked up automatically inside Docker (hot-reload).
+> **Note:** Source files are mounted as volumes — edit code on your machine and changes are picked up automatically inside Docker (hot-reload).
 
 ---
 
 ## How to Run Tests
 
+Make sure you're in the project root (`courier-service-project/`).
+
 ```bash
-# Run all tests repo by repo
-cd courier-service-core && npm test && cd ..       # 147 tests
-cd courier-service-api && npm test && cd ..        # 33 tests
-cd courier-service-cli && npm test && cd ..        # 113 tests
-cd courier-service-frontend && npm test && cd ..   # 248 tests
+# Core — 147 tests
+cd courier-service-core && npm test && cd ..
+
+# API — 33 tests
+cd courier-service-api && npm test && cd ..
+
+# CLI — 113 tests
+cd courier-service-cli && npm test && cd ..
+
+# Frontend — 248 tests
+cd courier-service-frontend && npm test && cd ..
 ```
 
 All tests should pass. Total: **541 tests**.
@@ -209,19 +293,26 @@ All tests should pass. Total: **541 tests**.
 
 ### Run the API
 
+Open a terminal and run:
+
 ```bash
 cd courier-service-api
 npm run dev
 ```
 
-The API starts on `http://localhost:3000`. You can test it with:
+You should see output like `Server listening on port 3000`. The API is now running at `http://localhost:3000`.
+
+To check if it's working, open a **new terminal** and run:
 
 ```bash
-# Health check
 curl http://localhost:3000/api/health
 ```
 
+You should see `{"status":"ok"}`.
+
 ### Run the CLI
+
+Open a terminal and run:
 
 ```bash
 cd courier-service-cli
@@ -232,19 +323,71 @@ This opens an interactive terminal UI. Type your input line by line, then press 
 
 You can also paste multi line input directly, it will be processed as separate lines.
 
+> **Tip:** The CLI works without the API running. It will automatically fall back to local calculations using the core library.
+
 ### Run the Frontend
 
-```bash
-# Start the API first (in one terminal)
-cd courier-service-api && npm run dev
+You need **two terminals** for this:
 
-# Then start the frontend (in another terminal)
-cd courier-service-frontend && npm run dev
+**Terminal 1** — Start the API first:
+
+```bash
+cd courier-service-api
+npm run dev
 ```
 
-The frontend opens on `http://localhost:5173`. It connects to the API automatically.
+**Terminal 2** — Then start the frontend:
 
-> **Note:** The frontend works without the API too — it falls back to running calculations locally using the core library.
+```bash
+cd courier-service-frontend
+npm run dev
+```
+
+Open your browser and go to `http://localhost:5173`.
+
+> **Note:** The frontend also works without the API — it falls back to running calculations locally using the core library.
+
+---
+
+## API Testing with Bruno
+
+The API includes a [Bruno](https://www.usebruno.com/) collection for testing all endpoints interactively. The collection is located at [`courier-service-api/bruno/`](https://github.com/nurulizyansyaza/courier-service-api/tree/main/bruno).
+
+### Setup Bruno
+
+1. **Download and install Bruno** from [usebruno.com/downloads](https://www.usebruno.com/downloads) (or run `brew install bruno` on macOS)
+2. **Open Bruno** and click **Open Collection**
+3. **Navigate to** the `courier-service-api/bruno/` folder and select it
+4. **Select an environment** — click the environment dropdown (top right corner) and choose **Local**
+
+### Environments
+
+| Environment | Base URL | When to use |
+|---|---|---|
+| **Local** | `http://localhost:3000` | When running the API locally with `npm run dev` |
+| **Staging** | `https://d28gbmf77bx81u.cloudfront.net` | Test against the staging deployment |
+| **Production** | `https://d31r5a2wvtwynh.cloudfront.net` | Test against the production deployment |
+
+### How to use
+
+- **Run a single request** — click any request in the sidebar, then click **Send** (or press <kbd>Ctrl</kbd>+<kbd>Enter</kbd>)
+- **Run all requests in a folder** — right-click a folder (e.g. `cost`) and select **Run All Requests**
+- **Switch environment** — use the dropdown at the top right to test against Local, Staging or Production
+
+### What's included
+
+The collection covers all endpoints with **37 requests** including happy paths, edge cases and validation errors:
+
+| Folder | Requests | What it tests |
+|---|---|---|
+| `health/` | 1 | Health check endpoint |
+| `cost/` | 6 | Cost calculation + validation errors |
+| `cost-validation/` | 16 | Detailed input validation (IDs, weights, offers, multi-error) |
+| `delivery/` | 3 | Delivery time calculation + validation |
+| `delivery-validation/` | 4 | Vehicle line validation, multi-error |
+| `delivery-transit/` | 4 | Transit package merging, ID conflicts |
+
+Each request includes inline assertions and documentation explaining the expected behavior.
 
 ---
 
