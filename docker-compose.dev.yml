@@ -93,8 +93,6 @@ services:
     command: npx ts-node src/cli.ts interactive --local
     stdin_open: true
     tty: true
-    environment:
-      - COURIER_THEME=${COURIER_THEME:-}
     volumes:
       - ../courier-service-cli/src:/app/courier-service-cli/src
       - ../courier-service-core/src:/app/courier-service-core/src

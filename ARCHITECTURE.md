@@ -7,7 +7,7 @@ Orchestration repo for the **Courier Service** App Calculator. Ties together the
 ```
 courier-service/          ← this repo (CI/CD + Docker + AWS infra)
 courier-service-core/     ← NPM package: cost, offers, shipment planning (147 tests)
-courier-service-cli/      ← Interactive CLI with Ink TUI (133 tests)
+courier-service-cli/      ← Interactive CLI with Ink TUI (124 tests)
 courier-service-api/      ← Express REST API with security middleware (33 tests)
 courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration (257 tests)
 ```
@@ -27,7 +27,7 @@ graph LR
 - **Frontend → Core**: Fallback when API is unreachable. Calculations run client-side.
 - **CLI → API → Core**: CLI tries API first (default `http://localhost:3000`), falls back to local core.
 - **CLI → Core**: With `--local` flag, CLI skips API and runs calculations directly via core.
-- **CLI theme**: Auto-detects terminal light/dark background via OSC 11 escape sequence (works through Docker/SSH). Live-switches colors every 2 seconds when terminal theme changes. Override with `--theme light|dark` or `COURIER_THEME` env var.
+- **CLI theme**: Uses a fixed dark color palette for consistent rendering across all environments (local terminal, Docker, SSH). The dark background ensures optimal contrast and readability regardless of the user's terminal theme.
 
 ### Core Library Modules
 
