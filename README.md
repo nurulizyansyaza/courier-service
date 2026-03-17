@@ -49,6 +49,7 @@ A courier service calculator that solves two problems:
 | **Ink** | 3.2 | Terminal UI framework (React for CLIs) |
 | **React** | 17 | Component rendering for Ink |
 | **Commander** | 12.1 | Command line argument parsing |
+| **Chalk** | 5 | Adaptive light/dark terminal colors |
 
 ### Frontend [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend)
 
@@ -83,9 +84,9 @@ A courier service calculator that solves two problems:
 |---|---|---|
 | Core | Jest | 147 |
 | API | Jest | 33 |
-| CLI | Jest | 113 |
-| Frontend | Vitest | 248 |
-| **Total** | | **541** |
+| CLI | Jest | 133 |
+| Frontend | Vitest | 257 |
+| **Total** | | **570** |
 
 ---
 
@@ -236,6 +237,12 @@ cd courier-service
 docker compose -f docker-compose.dev.yml run --rm cli
 ```
 
+The CLI auto-detects your terminal's light/dark background and adapts colors accordingly. To force a theme:
+
+```bash
+COURIER_THEME=light docker compose -f docker-compose.dev.yml run --rm cli
+```
+
 #### Run all tests in Docker
 
 ```bash
@@ -290,14 +297,14 @@ cd courier-service-core && npm test && cd ..
 # API — 33 tests
 cd courier-service-api && npm test && cd ..
 
-# CLI — 113 tests
+# CLI — 133 tests
 cd courier-service-cli && npm test && cd ..
 
-# Frontend — 248 tests
+# Frontend — 257 tests
 cd courier-service-frontend && npm test && cd ..
 ```
 
-All tests should pass. Total: **541 tests**.
+All tests should pass. Total: **570 tests**.
 
 ---
 
@@ -334,6 +341,8 @@ npm start
 This opens an interactive terminal UI. Type your input line by line, then press Enter to calculate.
 
 You can also paste multi line input directly, it will be processed as separate lines.
+
+The CLI auto-detects your terminal's light/dark background and live-switches colors when your theme changes. You can also force a theme with `--theme light` or `--theme dark`.
 
 > **Tip:** The CLI works without the API running. It will automatically fall back to local calculations using the core library.
 
