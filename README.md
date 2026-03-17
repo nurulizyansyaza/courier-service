@@ -157,57 +157,135 @@ graph TB
 
 ## Setup
 
-Clone all repos into the same parent directory:
+### Prerequisites
+
+| Tool | Version | How to check |
+|---|---|---|
+| **Node.js** | 18 or 20 (recommended: 20) | `node --version` |
+| **npm** | Comes with Node.js | `npm --version` |
+| **Git** | Any recent version | `git --version` |
+| **Docker** | Any recent version (optional) | `docker --version` |
+
+### Step 1 — Clone all repos
+
+Create a project folder and clone all repos into it:
 
 ```bash
-mkdir courier-service-project && cd courier-service-project
+mkdir courier-service-project
+cd courier-service-project
+
 git clone https://github.com/nurulizyansyaza/courier-service.git
 git clone https://github.com/nurulizyansyaza/courier-service-core.git
-git clone https://github.com/nurulizyansyaza/courier-service-cli.git
 git clone https://github.com/nurulizyansyaza/courier-service-api.git
+git clone https://github.com/nurulizyansyaza/courier-service-cli.git
 git clone https://github.com/nurulizyansyaza/courier-service-frontend.git
 ```
 
-Install and build:
+Your folder should now look like:
+
+```
+courier-service-project/
+├── courier-service/           ← this repo
+├── courier-service-core/
+├── courier-service-api/
+├── courier-service-cli/
+└── courier-service-frontend/
+```
+
+### Step 2 — Install and build
+
+> **Important:** Build the core library **first** — all other repos depend on it.
 
 ```bash
-cd courier-service-core && npm ci && npm run build && cd ..
-cd courier-service-cli && npm ci && cd ..
-cd courier-service-api && npm ci && npm run build && cd ..
-cd courier-service-frontend && npm ci && cd ..
+# 1. Core library (must be first)
+cd courier-service-core
+npm ci
+npm run build
+cd ..
+
+# 2. API
+cd courier-service-api
+npm ci
+npm run build
+cd ..
+
+# 3. CLI
+cd courier-service-cli
+npm ci
+cd ..
+
+# 4. Frontend
+cd courier-service-frontend
+npm ci
+cd ..
 ```
+
+### Step 3 — Verify it works
+
+```bash
+# Run the API
+cd courier-service-api && npm run dev &
+
+# Wait a moment, then check the health endpoint
+sleep 2 && curl http://localhost:3000/api/health
+# Should print: {"status":"ok"}
+```
+
+> **See also:** [INTRO.md](INTRO.md) for full step-by-step instructions with example test data and API requests.
 
 ## Docker
 
-All environments (local, staging, production) use the same multi-stage Dockerfile.
+### Development (with hot-reload)
+
+Start all services with one command — no manual install needed:
 
 ```bash
-# Build (from project root containing all repos)
+cd courier-service
+docker compose -f docker-compose.dev.yml up
+```
+
+This starts the core watcher, API (`http://localhost:3000`) and frontend (`http://localhost:5173`) with hot-reload.
+
+```bash
+# Run the CLI
+docker compose -f docker-compose.dev.yml run --rm cli
+
+# Run all 541 tests
+docker compose -f docker-compose.dev.yml run --rm test
+
+# Run tests for a single repo
+docker compose -f docker-compose.dev.yml run --rm test-core
+
+# Port conflicts? Change the port
+API_PORT=3001 FE_PORT=5174 docker compose -f docker-compose.dev.yml up
+
+# Stop everything
+docker compose -f docker-compose.dev.yml down
+```
+
+> Source files are mounted as volumes — edit code on your machine and changes are picked up automatically.
+
+### Production
+
+All environments (staging, production) use the same multi-stage Dockerfile:
+
+```bash
+# Build from project root (the folder containing all repos)
 docker build -f courier-service/Dockerfile -t courier-service .
 
-# Run API server
+# Run the API server
 docker run -p 3000:3000 courier-service
 
-# Test API - Cost Calculation
-curl -s -X POST http://localhost:3000/api/cost \
-  -H 'Content-Type: application/json' \
-  -d '{"input": "100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003"}' | jq
-
-# Test API - Delivery Time Calculation
-curl -s -X POST http://localhost:3000/api/delivery/transit \
-  -H 'Content-Type: application/json' \
-  -d '{"input": "100 5\nPKG1 50 30 OFR001\nPKG2 75 125 NA\nPKG3 175 100 OFR003\nPKG4 110 60 OFR002\nPKG5 155 95 NA\n2 70 200", "transitPackages": []}' | jq
+# Test it
+curl http://localhost:3000/api/health
 
 # Run CLI interactively
-docker run -it --entrypoint node courier-service courier-service-cli/bin/courier-service
-
-# Run CLI in local-only mode (no API dependency)
 docker run -it --entrypoint node courier-service courier-service-cli/bin/courier-service --local
 ```
 
-> **Note:** The CLI runs as an interactive terminal UI (Ink TUI). Use `-it` flags for Docker to enable TTY interaction. For non-interactive/scripted usage, use the API endpoints directly.
+> **Note:** The CLI needs `-it` flags for interactive terminal UI. For non-interactive usage, use the API endpoints.
 
-### Docker Compose
+### Docker Compose (production)
 
 ```bash
 docker compose up courier-api              # Start API server on port 3000
