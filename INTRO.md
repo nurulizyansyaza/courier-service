@@ -114,6 +114,7 @@ A courier service calculator that solves two problems:
 - **Node.js** 18 or 20 (recommended: 20)
 - **npm** (comes with Node.js)
 - **Git**
+- **Docker** (optional — for one command dev setup)
 
 ### Step 1 — Clone all repos
 
@@ -138,6 +139,55 @@ cd courier-service-api && npm ci && npm run build && cd ..
 cd courier-service-cli && npm ci && cd ..
 cd courier-service-frontend && npm ci && cd ..
 ```
+
+### Alternative — Docker Dev Setup
+
+If you have **Docker** installed, you can skip the manual setup and run everything with one command:
+
+```bash
+cd courier-service
+docker compose -f docker-compose.dev.yml up
+```
+
+This starts:
+- **Core** — watches for changes and rebuilds automatically
+- **API** — Express server on `http://localhost:3000` (auto-restarts on change)
+- **Frontend** — Vite dev server on `http://localhost:5173` (hot module replacement)
+
+**Run the CLI:**
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm cli
+```
+
+**Run all 541 tests:**
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm test
+```
+
+**Run tests for a specific repo:**
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm test-core
+docker compose -f docker-compose.dev.yml run --rm test-api
+docker compose -f docker-compose.dev.yml run --rm test-cli
+docker compose -f docker-compose.dev.yml run --rm test-fe
+```
+
+**Port conflicts?** Ports are configurable:
+
+```bash
+API_PORT=3001 FE_PORT=5174 docker compose -f docker-compose.dev.yml up
+```
+
+**Stop everything:**
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+> **Note:** Source files are mounted as volumes — edit code locally and changes are picked up automatically inside Docker (hot-reload).
 
 ---
 
