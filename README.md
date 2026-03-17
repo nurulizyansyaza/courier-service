@@ -257,7 +257,12 @@ docker compose -f docker-compose.dev.yml run --rm test
 docker compose -f docker-compose.dev.yml run --rm test-core
 
 # Port conflicts? Change the port
-API_PORT=3001 FE_PORT=5174 docker compose -f docker-compose.dev.yml up
+API_PORT=3001 FE_PORT=5174 docker compose -f  # Since you used `FE_PORT=5174`, visit http://localhost:5174 instead
+docker-compose.dev.yml up
+
+# To kill whatever's on 5173:
+lsof -i :5173   # find the PID
+kill <PID>       # then you can use the default port
 
 # Stop everything
 docker compose -f docker-compose.dev.yml down
