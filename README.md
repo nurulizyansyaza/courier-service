@@ -260,6 +260,15 @@ If you see an error like `port is already in use`, change the port:
 API_PORT=3001 FE_PORT=5174 docker compose -f docker-compose.dev.yml up
 ```
 
+> **Note:** Since you used `FE_PORT=5174`, visit http://localhost:5174 instead.
+
+#### To kill whatever's on 5173:
+
+```bash
+lsof -i :5173   # find the PID
+kill <PID>       # then you can use the default port
+```
+
 #### Stop everything
 
 ```bash
