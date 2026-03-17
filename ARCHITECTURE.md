@@ -28,6 +28,7 @@ graph LR
 - **CLI → API → Core**: CLI tries API first (default `http://localhost:3000`), falls back to local core.
 - **CLI → Core**: With `--local` flag, CLI skips API and runs calculations directly via core.
 - **CLI theme**: Forces a dark terminal background and uses a fixed dark color palette, ensuring consistent rendering regardless of the user's terminal theme (local, Docker, SSH). Background is restored to default on exit.
+- **Multi-line input**: Both CLI and frontend support Shift+Enter for new lines. Smart Enter auto-adds a new line when the header declares more packages than currently entered. The frontend's `❯` prompt tracks the cursor line within multi-line input. Arrow keys navigate between lines mid-input and only trigger history navigation on the first/last line.
 
 ### Core Library Modules
 

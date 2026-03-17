@@ -334,7 +334,7 @@ npm start
 
 This opens an interactive terminal UI. Type your input line by line, then press Enter to calculate.
 
-You can also paste multi line input directly, it will be processed as separate lines.
+You can also paste multi-line input directly — it will be processed as separate lines. Use **Shift+Enter** to add new lines manually. Smart Enter automatically inserts a new line when more package lines are expected based on the header count.
 
 The CLI forces a dark background on the terminal and uses a fixed dark color palette, ensuring consistent rendering regardless of the user's terminal theme.
 
