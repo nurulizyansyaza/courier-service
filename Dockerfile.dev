@@ -1,0 +1,34 @@
+# Development image — all repos, all dev dependencies, hot-reload ready
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install system deps needed by some npm packages
+RUN apk add --no-cache git
+
+# Core — install deps and build first (other repos depend on it)
+COPY courier-service-core/package*.json ./courier-service-core/
+RUN cd courier-service-core && npm ci
+
+COPY courier-service-core/ ./courier-service-core/
+RUN cd courier-service-core && npm run build
+
+# API — install deps (ts-node for dev mode)
+COPY courier-service-api/package*.json ./courier-service-api/
+RUN cd courier-service-api && npm ci
+
+# CLI — install deps (ts-node for dev mode, skip prepare build)
+COPY courier-service-cli/package*.json ./courier-service-cli/
+RUN cd courier-service-cli && npm ci --ignore-scripts
+
+# Frontend — install deps (Vite for dev server)
+COPY courier-service-frontend/package*.json ./courier-service-frontend/
+RUN cd courier-service-frontend && npm ci
+
+# Copy all source code (will be overridden by volume mounts in dev)
+COPY courier-service-core/ ./courier-service-core/
+COPY courier-service-api/ ./courier-service-api/
+COPY courier-service-cli/ ./courier-service-cli/
+COPY courier-service-frontend/ ./courier-service-frontend/
+
+ENV NODE_ENV=development

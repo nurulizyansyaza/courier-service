@@ -1,0 +1,189 @@
+# Local Development — run everything with hot-reload
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up              # Start core + API + Frontend
+#   docker compose -f docker-compose.dev.yml up api fe       # Start API + Frontend only
+#   docker compose -f docker-compose.dev.yml run --rm cli    # Interactive CLI
+#   docker compose -f docker-compose.dev.yml run --rm test   # Run all 541 tests
+#   docker compose -f docker-compose.dev.yml run --rm test-core  # Run core tests only
+#
+# Ports (configurable via env vars):
+#   API:      ${API_PORT:-3000}  → http://localhost:3000
+#   Frontend: ${FE_PORT:-5173}   → http://localhost:5173
+#
+# Services:
+#   core     — Watches core source, rebuilds on change (other services pick up changes)
+#   api      — Express API with ts-node (auto-restarts on change)
+#   fe       — Vite dev server (hot module replacement, proxies /api to API)
+#   cli      — Interactive CLI (run manually with: docker compose run --rm cli)
+#   test     — Runs all test suites across all repos
+
+services:
+  # ── Core Library (build watcher) ──────────────────────────────────
+  core:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-core
+    command: npx tsc --watch --preserveWatchOutput
+    volumes:
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - ../courier-service-core/tsconfig.json:/app/courier-service-core/tsconfig.json
+      - core-dist:/app/courier-service-core/dist
+
+  # ── API Server ────────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-api
+    command: npx ts-node --transpile-only src/index.ts
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      - ../courier-service-api/src:/app/courier-service-api/src
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - core-dist:/app/courier-service-core/dist
+    depends_on:
+      - core
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Frontend Dev Server ───────────────────────────────────────────
+  fe:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-frontend
+    command: npx vite --host 0.0.0.0
+    ports:
+      - "${FE_PORT:-5173}:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://api:3000
+    volumes:
+      - ../courier-service-frontend/src:/app/courier-service-frontend/src
+      - ../courier-service-frontend/public:/app/courier-service-frontend/public
+      - ../courier-service-frontend/index.html:/app/courier-service-frontend/index.html
+      - ../courier-service-frontend/vite.config.ts:/app/courier-service-frontend/vite.config.ts
+      - ../courier-service-frontend/frameworkPlugin.ts:/app/courier-service-frontend/frameworkPlugin.ts
+      - ../courier-service-frontend/tsconfig.json:/app/courier-service-frontend/tsconfig.json
+      - ../courier-service-frontend/framework.config.json:/app/courier-service-frontend/framework.config.json
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - core-dist:/app/courier-service-core/dist
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── CLI (interactive, run manually) ───────────────────────────────
+  cli:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-cli
+    command: npx ts-node src/cli.ts interactive --local
+    stdin_open: true
+    tty: true
+    volumes:
+      - ../courier-service-cli/src:/app/courier-service-cli/src
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - core-dist:/app/courier-service-core/dist
+    depends_on:
+      - core
+    profiles:
+      - cli
+
+  # ── Test Runner (run all tests) ───────────────────────────────────
+  test:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    command: >
+      sh -c "
+        echo '═══ Core Tests ═══' &&
+        cd /app/courier-service-core && npm test -- --silent &&
+        echo '' &&
+        echo '═══ API Tests ═══' &&
+        cd /app/courier-service-api && npm test -- --silent &&
+        echo '' &&
+        echo '═══ CLI Tests ═══' &&
+        cd /app/courier-service-cli && npm test -- --silent &&
+        echo '' &&
+        echo '═══ Frontend Tests ═══' &&
+        cd /app/courier-service-frontend && npx vitest run &&
+        echo '' &&
+        echo 'All tests passed!'
+      "
+    volumes:
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - ../courier-service-api/src:/app/courier-service-api/src
+      - ../courier-service-cli/src:/app/courier-service-cli/src
+      - ../courier-service-frontend/src:/app/courier-service-frontend/src
+      - core-dist:/app/courier-service-core/dist
+    profiles:
+      - test
+
+  # ── Individual Test Runners ───────────────────────────────────────
+  test-core:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-core
+    command: npm test
+    volumes:
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - ../courier-service-core/tests:/app/courier-service-core/tests
+    profiles:
+      - test
+
+  test-api:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-api
+    command: npm test
+    volumes:
+      - ../courier-service-api/src:/app/courier-service-api/src
+      - ../courier-service-api/__tests__:/app/courier-service-api/__tests__
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - core-dist:/app/courier-service-core/dist
+    profiles:
+      - test
+
+  test-cli:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-cli
+    command: npm test
+    volumes:
+      - ../courier-service-cli/src:/app/courier-service-cli/src
+      - ../courier-service-cli/__tests__:/app/courier-service-cli/__tests__
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - core-dist:/app/courier-service-core/dist
+    profiles:
+      - test
+
+  test-fe:
+    build:
+      context: ..
+      dockerfile: courier-service/Dockerfile.dev
+    working_dir: /app/courier-service-frontend
+    command: npx vitest run
+    volumes:
+      - ../courier-service-frontend/src:/app/courier-service-frontend/src
+      - ../courier-service-core/src:/app/courier-service-core/src
+      - core-dist:/app/courier-service-core/dist
+    profiles:
+      - test
+
+volumes:
+  core-dist:
