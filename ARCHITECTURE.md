@@ -27,7 +27,7 @@ graph LR
 - **Frontend → Core**: Fallback when API is unreachable. Calculations run client-side.
 - **CLI → API → Core**: CLI tries API first (default `http://localhost:3000`), falls back to local core.
 - **CLI → Core**: With `--local` flag, CLI skips API and runs calculations directly via core.
-- **CLI theme**: Uses a fixed dark color palette for consistent rendering across all environments (local terminal, Docker, SSH). The dark background ensures optimal contrast and readability regardless of the user's terminal theme.
+- **CLI theme**: Forces a dark terminal background and uses a fixed dark color palette, ensuring consistent rendering regardless of the user's terminal theme (local, Docker, SSH). Background is restored to default on exit.
 
 ### Core Library Modules
 
@@ -279,10 +279,7 @@ This starts the core watcher, API (`http://localhost:3000`) and frontend (`http:
 # Run the CLI
 docker compose -f docker-compose.dev.yml run --rm cli
 
-# Run the CLI with forced light theme
-COURIER_THEME=light docker compose -f docker-compose.dev.yml run --rm cli
-
-# Run all 570 tests
+# Run all 561 tests
 docker compose -f docker-compose.dev.yml run --rm test
 
 # Run tests for a single repo
@@ -445,7 +442,7 @@ scripts/
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 
 1. **test-core** — installs and tests `courier-service-core` (Node 18 + 20, 147 tests)
-2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20, 133 tests)
+2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20, 124 tests)
 3. **test-api** — installs core + API, runs API tests (Node 18 + 20, 33 tests)
 4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20, 257 tests)
 5. **test-system** — verifies core library outputs and API cost endpoint
@@ -512,6 +509,6 @@ courier-service-core (source of truth)
 ## Related Repos
 
 - [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core) — Core logic NPM package (147 tests)
-- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application with Ink TUI (133 tests)
+- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application with Ink TUI (124 tests)
 - [courier-service-api](https://github.com/nurulizyansyaza/courier-service-api) — Express REST API with Bruno test collection (33 tests)
 - [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend) — React/Vue/Svelte dashboard (257 tests)

@@ -336,7 +336,7 @@ This opens an interactive terminal UI. Type your input line by line, then press 
 
 You can also paste multi line input directly, it will be processed as separate lines.
 
-The CLI uses a fixed dark color palette optimized for consistent rendering across all environments (local terminal, Docker, SSH).
+The CLI forces a dark background on the terminal and uses a fixed dark color palette, ensuring consistent rendering regardless of the user's terminal theme.
 
 > **Tip:** The CLI works without the API running. It will automatically fall back to local calculations using the core library.
 
