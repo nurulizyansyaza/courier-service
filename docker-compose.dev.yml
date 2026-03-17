@@ -4,6 +4,7 @@
 #   docker compose -f docker-compose.dev.yml up              # Start core + API + Frontend
 #   docker compose -f docker-compose.dev.yml up api fe       # Start API + Frontend only
 #   docker compose -f docker-compose.dev.yml run --rm cli    # Interactive CLI
+#   COURIER_THEME=light docker compose -f docker-compose.dev.yml run --rm cli  # Light theme
 #   docker compose -f docker-compose.dev.yml run --rm test   # Run all 541 tests
 #   docker compose -f docker-compose.dev.yml run --rm test-core  # Run core tests only
 #
@@ -92,6 +93,8 @@ services:
     command: npx ts-node src/cli.ts interactive --local
     stdin_open: true
     tty: true
+    environment:
+      - COURIER_THEME=${COURIER_THEME:-}
     volumes:
       - ../courier-service-cli/src:/app/courier-service-cli/src
       - ../courier-service-core/src:/app/courier-service-core/src
