@@ -20,7 +20,7 @@ A courier service calculator that solves two problems:
 ## Tech Stack, Infrastructure & Architecture (with further details linked below)
 
 ### Infrastructure & Architecture
-- **Link**: [README.md](https://github.com/nurulizyansyaza/courier-service/blob/main/README.md)
+- **Link**: [ARCHITECTURE.md](https://github.com/nurulizyansyaza/courier-service/blob/main/ARCHITECTURE.md)
 
 ### Core [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core)
 
