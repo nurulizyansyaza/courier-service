@@ -115,6 +115,7 @@ jobs:
         run: |
           cd courier-service-frontend
           echo '{"framework":"react"}' > framework.config.json
+          sed -i 's|src="[^"]*"|src="/src/react/main.tsx"|' index.html
           node -e "
             const fs = require('fs');
             const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf-8'));
