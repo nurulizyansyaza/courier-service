@@ -127,8 +127,11 @@ services:
       "
     volumes:
       - ../courier-service-core/src:/app/courier-service-core/src
+      - ../courier-service-core/tests:/app/courier-service-core/tests
       - ../courier-service-api/src:/app/courier-service-api/src
+      - ../courier-service-api/__tests__:/app/courier-service-api/__tests__
       - ../courier-service-cli/src:/app/courier-service-cli/src
+      - ../courier-service-cli/__tests__:/app/courier-service-cli/__tests__
       - ../courier-service-frontend/src:/app/courier-service-frontend/src
       - core-dist:/app/courier-service-core/dist
     profiles:
