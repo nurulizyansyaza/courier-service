@@ -6,10 +6,10 @@ Orchestration repo for the **Courier Service** App Calculator. Ties together the
 
 ```
 courier-service/          ← this repo (CI/CD + Docker + AWS infra)
-courier-service-core/     ← NPM package: cost, offers, shipment planning
-courier-service-cli/      ← CLI app consuming the core package
-courier-service-api/      ← Express REST API with security middleware
-courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
+courier-service-core/     ← NPM package: cost, offers, shipment planning (147 tests)
+courier-service-cli/      ← Interactive CLI with Ink TUI (113 tests)
+courier-service-api/      ← Express REST API with security middleware (33 tests)
+courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration (248 tests)
 ```
 
 ### How They Connect
@@ -18,14 +18,37 @@ courier-service-frontend/ ← React/Vue/Svelte dashboard with API integration
 graph LR
     Frontend["Frontend<br/>(Vite SPA)"] -->|"/api/* proxy"| API["API<br/>(Express)"]
     API --> Core["Core<br/>(TS Library)"]
-    CLI["CLI<br/>(Commander + Ink)"] --> Core
+    CLI["CLI<br/>(Ink TUI)"] --> Core
+    CLI -.->|"--api-url"| API
     Frontend -.->|"local fallback"| Core
 ```
 
 - **Frontend → API → Core**: Primary path. API provides rate limiting, validation, and security headers.
 - **Frontend → Core**: Fallback when API is unreachable. Calculations run client-side.
-- **CLI → API → Core**: CLI tries API first (if `apiUrl` configured), falls back to local core.
-- **CLI → Core**: Standalone. CLI reads stdin and outputs results directly.
+- **CLI → API → Core**: CLI tries API first (default `http://localhost:3000`), falls back to local core.
+- **CLI → Core**: With `--local` flag, CLI skips API and runs calculations directly via core.
+
+### Core Library Modules
+
+```mermaid
+graph TB
+    subgraph Core["@courier-service-core"]
+        Parser["parser.ts<br/>Input parsing &amp; validation"]
+        Cost["costCalculator.ts<br/>Cost &amp; discount calculation"]
+        Planner["deliveryPlanner.ts<br/>Vehicle assignment &amp; scheduling"]
+        Output["outputParser.ts<br/>Result formatting &amp; parsing"]
+        Transit["transitHelpers.ts<br/>Transit conflict resolution"]
+        Constants["constants.ts<br/>Shared multipliers &amp; regex"]
+        Validators["validators.ts<br/>Offer code &amp; input validation"]
+    end
+
+    Parser --> Constants
+    Parser --> Validators
+    Cost --> Constants
+    Planner --> Transit
+    Planner --> Constants
+    Output --> Transit
+```
 
 ### Cost Calculation Flow
 
@@ -165,20 +188,30 @@ docker build -f courier-service/Dockerfile -t courier-service .
 # Run API server
 docker run -p 3000:3000 courier-service
 
-# Run CLI - Problem 1
-printf '100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003\n' | \
-  docker run -i --entrypoint node courier-service courier-service-cli/bin/courier-service cost
+# Test API - Cost Calculation
+curl -s -X POST http://localhost:3000/api/cost \
+  -H 'Content-Type: application/json' \
+  -d '{"input": "100 3\nPKG1 5 5 OFR001\nPKG2 15 5 OFR002\nPKG3 10 100 OFR003"}' | jq
 
-# Run CLI - Problem 2
-printf '100 5\nPKG1 50 30 OFR001\nPKG2 75 125 OFR008\nPKG3 175 100 OFR003\nPKG4 110 60 OFR002\nPKG5 155 95 NA\n2 70 200\n' | \
-  docker run -i --entrypoint node courier-service courier-service-cli/bin/courier-service delivery
+# Test API - Delivery Time Calculation
+curl -s -X POST http://localhost:3000/api/delivery/transit \
+  -H 'Content-Type: application/json' \
+  -d '{"input": "100 5\nPKG1 50 30 OFR001\nPKG2 75 125 NA\nPKG3 175 100 OFR003\nPKG4 110 60 OFR002\nPKG5 155 95 NA\n2 70 200", "transitPackages": []}' | jq
+
+# Run CLI interactively
+docker run -it --entrypoint node courier-service courier-service-cli/bin/courier-service
+
+# Run CLI in local-only mode (no API dependency)
+docker run -it --entrypoint node courier-service courier-service-cli/bin/courier-service --local
 ```
+
+> **Note:** The CLI runs as an interactive terminal UI (Ink TUI). Use `-it` flags for Docker to enable TTY interaction. For non-interactive/scripted usage, use the API endpoints directly.
 
 ### Docker Compose
 
 ```bash
 docker compose up courier-api              # Start API server on port 3000
-printf '...' | docker compose run courier-service cost   # Run CLI
+docker compose run -it courier-service     # Run CLI interactively
 ```
 
 ### Docker Image Details
@@ -193,6 +226,7 @@ The runtime image includes:
 - `HEALTHCHECK` — `wget` to `/api/health` every 30s
 - `CMD` — defaults to running the API server
 - `NODE_ENV=production`
+- Graceful shutdown on `SIGTERM`/`SIGINT` — closes connections cleanly before ECS task stops
 
 ## AWS Deployment
 
@@ -341,11 +375,11 @@ scripts/
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
 
-1. **test-core** — installs and tests `courier-service-core` (Node 18 + 20)
-2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20)
-3. **test-api** — installs core + API, runs API tests (Node 18 + 20)
-4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20)
-5. **test-system** — verifies CLI Problem 1/2 outputs and API cost endpoint
+1. **test-core** — installs and tests `courier-service-core` (Node 18 + 20, 147 tests)
+2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20, 113 tests)
+3. **test-api** — installs core + API, runs API tests (Node 18 + 20, 33 tests)
+4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20, 248 tests)
+5. **test-system** — verifies core library outputs and API cost endpoint
 
 Staging deployment (`.github/workflows/deploy-staging.yml`) runs on push to `staging` or via `workflow_dispatch`.
 
@@ -368,7 +402,7 @@ graph LR
 | **Helmet** | Security headers against XSS, clickjacking, MIME sniffing |
 | **CORS** | Origin whitelist (localhost dev + CloudFront distributions) |
 | **Rate Limiting** | Global: 100 req/15min, Calculations: 30 req/min |
-| **Zod Validation** | Schema-based input validation (type safety, length limits) |
+| **Zod Validation** | Schema-based input validation (type safety, length limits, all errors returned) |
 | **Body Size Limit** | 100kb max request body |
 | **Morgan** | HTTP request logging |
 
@@ -396,14 +430,15 @@ courier-service-core (source of truth)
   └── courier-service-frontend → API-first + local core fallback
 ```
 
-- **Zero logic duplication** — parsing, cost calculation, delivery planning, and offer validation all live in core
+- **Zero logic duplication** — parsing, cost calculation, delivery planning, transit conflict resolution, and offer validation all live in core
+- **Centralized constants** — magic numbers (weight/distance multipliers, package limits) and shared regex patterns defined once in `constants.ts`
 - **API-first with fallback** — CLI and frontend try the API first; if unreachable, run the same core functions locally
 - When core is updated, all consumers get the changes after `npm ci` / rebuild
 - CI builds core first, then runs downstream tests to catch breaking changes
 
 ## Related Repos
 
-- [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core) — Core logic NPM package (123 tests)
-- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application with Ink TUI (32 tests)
-- [courier-service-api](https://github.com/nurulizyansyaza/courier-service-api) — Express REST API with Bruno test collection
-- [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend) — React/Vue/Svelte dashboard (243 tests)
+- [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core) — Core logic NPM package (147 tests)
+- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application with Ink TUI (113 tests)
+- [courier-service-api](https://github.com/nurulizyansyaza/courier-service-api) — Express REST API with Bruno test collection (33 tests)
+- [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend) — React/Vue/Svelte dashboard (248 tests)
