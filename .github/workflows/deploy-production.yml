@@ -26,6 +26,7 @@ permissions:
 
 env:
   HOMELAB_DEPLOY_PATH: /opt/courier-service
+  HOMELAB_DOMAIN: nurulizyansyaza.com
   ENVIRONMENT: production
   CORE_REF: main
   CLI_REF: main
@@ -111,14 +112,20 @@ jobs:
           ref: ${{ env.API_REF }}
           path: courier-service-api
 
-      - name: Set up SSH
+      - name: Set up SSH via Cloudflare Tunnel
         run: |
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+          chmod +x /usr/local/bin/cloudflared
           mkdir -p ~/.ssh
           echo "${{ secrets.HOMELAB_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.HOMELAB_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Build Docker image
+          cat > ~/.ssh/config <<EOF
+          Host ${{ secrets.HOMELAB_HOST }}
+            ProxyCommand /usr/local/bin/cloudflared access ssh --hostname %h
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
         run: |
           IMAGE_TAG="courier-service-api:${{ github.sha }}"
           docker build \
@@ -162,7 +169,7 @@ jobs:
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
 
       - name: Print API URL
-        run: echo "::notice::API deployed to https://${{ secrets.HOMELAB_HOST }}/courier-service/api/health"
+        run: echo "::notice::API deployed to https://${{ env.HOMELAB_DOMAIN }}/courier-service/api/health"
 
   # ── Deploy Frontend (Build all frameworks → rsync to homelab) ───────
   deploy-frontend:
@@ -189,14 +196,20 @@ jobs:
         with:
           node-version: 20
 
-      - name: Set up SSH
+      - name: Set up SSH via Cloudflare Tunnel
         run: |
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+          chmod +x /usr/local/bin/cloudflared
           mkdir -p ~/.ssh
           echo "${{ secrets.HOMELAB_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.HOMELAB_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Install dependencies
+          cat > ~/.ssh/config <<EOF
+          Host ${{ secrets.HOMELAB_HOST }}
+            ProxyCommand /usr/local/bin/cloudflared access ssh --hostname %h
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
         run: |
           cd courier-service-core && npm ci && npm run build
           cd ../courier-service-frontend && npm ci
@@ -230,4 +243,4 @@ jobs:
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
 
       - name: Print Frontend URL
-        run: echo "::notice::Frontend deployed to https://${{ secrets.HOMELAB_HOST }}/courier-service/frontend/"
+        run: echo "::notice::Frontend deployed to https://${{ env.HOMELAB_DOMAIN }}/courier-service/frontend/"
