@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courier Service CLI — nurulizyansyaza</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --orange: #d29922;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .breadcrumb { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    h2 { font-size: 1.25rem; margin: 2rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--accent); }
+    p { margin-bottom: 0.75rem; }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+    code { font-family: 'SF Mono', 'Fira Code', monospace; }
+    p code, li code {
+      background: var(--surface);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    th { color: var(--text-muted); font-weight: 600; }
+    ul, ol { margin-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.25rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--green);
+    }
+    footer { color: var(--text-muted); font-size: 0.8rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <p class="breadcrumb"><a href="/courier-service/">← Courier Service</a></p>
+    <h1>📟 Courier Service CLI</h1>
+    <p>Interactive terminal UI for the Courier Service delivery cost and time calculator. Built with <a href="https://github.com/vadimdemedes/ink" style="color: var(--accent);">Ink</a> (React for the terminal).</p>
+
+    <h2>Setup</h2>
+
+    <h3>Prerequisites</h3>
+    <ul>
+      <li><strong>Node.js</strong> 18 or 20 — check with <code>node --version</code></li>
+      <li><strong>npm</strong> — check with <code>npm --version</code></li>
+      <li><strong>courier-service-core</strong> must be built first</li>
+    </ul>
+
+    <h3>Step 1 — Build the core library</h3>
+    <pre><code>cd courier-service-core
+npm install
+npm run build
+cd ..</code></pre>
+
+    <h3>Step 2 — Install dependencies</h3>
+    <pre><code>cd courier-service-cli
+npm install</code></pre>
+
+    <h3>Step 3 — Run the CLI</h3>
+    <pre><code># Easiest way — local mode (no API needed)
+npm start</code></pre>
+
+    <h3>Other ways to run</h3>
+    <pre><code># Local-only mode (no API dependency)
+node bin/courier-service --local
+
+# With API (start the API server first in another terminal)
+node bin/courier-service
+
+# Custom API URL
+node bin/courier-service --api-url http://localhost:4000</code></pre>
+
+    <h2>Usage</h2>
+    <p>The CLI launches a full terminal UI with:</p>
+    <ul>
+      <li>Dark color theme with forced dark background</li>
+      <li>↑/↓ arrow keys to navigate command history</li>
+      <li>Multi-line input with Shift+Enter for new lines</li>
+      <li>Multi-line paste support with preview and confirmation</li>
+      <li>API-first calculation with local fallback</li>
+      <li>Transit package tracking across calculations</li>
+      <li>Session persistence (<code>~/.courier-cli-session.json</code>)</li>
+    </ul>
+
+    <h3>Commands</h3>
+    <table>
+      <tr><th>Command</th><th>Description</th></tr>
+      <tr><td><code>/change mode cost | time</code></td><td>Switch calculation mode</td></tr>
+      <tr><td><code>clear</code></td><td>Clear screen and show welcome</td></tr>
+      <tr><td><code>help</code></td><td>Show available commands</td></tr>
+      <tr><td><code>exit</code> / <code>quit</code></td><td>Exit the application</td></tr>
+      <tr><td><code>Shift+Enter</code></td><td>Add new line (multi-line input)</td></tr>
+      <tr><td><code>↑</code> / <code>↓</code></td><td>Navigate command history</td></tr>
+      <tr><td><code>Ctrl+C</code></td><td>Cancel current input</td></tr>
+    </table>
+
+    <h3>Input Format</h3>
+    <p><strong>Cost Mode:</strong></p>
+    <pre><code>baseCost packageCount
+pkgId weight distance offerCode
+...</code></pre>
+
+    <p><strong>Time Mode (cost mode + fleet line):</strong></p>
+    <pre><code>baseCost packageCount
+pkgId weight distance offerCode
+...
+vehicleCount maxSpeed maxWeight</code></pre>
+
+    <h3>Example</h3>
+    <pre><code>100 3
+pkg1 50 70 ofr001
+pkg2 75 70 ofr003
+pkg3 100 200 ofr002
+2 70 200</code></pre>
+
+    <h2>Testing</h2>
+    <p><span class="badge">124 tests</span> across <strong>11 test suites</strong></p>
+    <pre><code>npm test</code></pre>
+
+    <table>
+      <tr><th>Suite</th><th>Tests</th><th>Description</th></tr>
+      <tr><td><code>cliCommands.test.ts</code></td><td>13</td><td>Command routing</td></tr>
+      <tr><td><code>cliCalculationRunner.test.ts</code></td><td>7</td><td>Calculation runner — API + local fallback</td></tr>
+      <tr><td><code>localCalculation.test.ts</code></td><td>11</td><td>Local calculation — cost, time, transit</td></tr>
+      <tr><td><code>cliSession.test.ts</code></td><td>5</td><td>Session persistence</td></tr>
+      <tr><td><code>cliSession.integration.test.ts</code></td><td>8</td><td>Session file read/write/clear</td></tr>
+      <tr><td><code>resultMapper.test.ts</code></td><td>6</td><td>Result mapping</td></tr>
+      <tr><td><code>inputHelpers.test.ts</code></td><td>14</td><td>Input utilities</td></tr>
+      <tr><td><code>inputHandlers.test.ts</code></td><td>27</td><td>Keyboard navigation, paste, editing</td></tr>
+      <tr><td><code>useInputCollector.test.ts</code></td><td>10</td><td>Input collector</td></tr>
+      <tr><td><code>calculation.integration.test.ts</code></td><td>12</td><td>End-to-end calculations</td></tr>
+      <tr><td><code>theme.test.ts</code></td><td>4</td><td>Color scheme</td></tr>
+    </table>
+
+    <h2>Architecture</h2>
+    <pre><code>src/
+  cli.ts                    # Commander.js entry point
+  cliCommands.ts            # Command routing
+  cliCalculationRunner.ts   # API-first + local fallback
+  localCalculation.ts       # Local cost/time/transit logic
+  cliSession.ts             # File-based session persistence
+  resultMapper.ts           # PackageResult mapping
+  inputHelpers.ts           # Pure input utilities
+  ui/
+    App.tsx                 # Root component
+    useInputCollector.ts    # Multi-line collection hook
+    useInputState.ts        # Input value/cursor/history hook
+    inputHandlers.ts        # Keyboard handler functions
+    HistoryRenderer.tsx     # History items renderer
+    InputPrompt.tsx         # Text input with mode indicator
+    ResultCard.tsx          # Per-package result display
+    WelcomeScreen.tsx       # ASCII art, offers table
+    HelpScreen.tsx          # Available commands display
+    ErrorDisplay.tsx        # Error message display
+    theme.ts                # Dark color palette</code></pre>
+
+    <h2>Dependencies</h2>
+    <table>
+      <tr><th>Package</th><th>Purpose</th></tr>
+      <tr><td><code>@nurulizyansyaza/courier-service-core</code></td><td>Core calculation engine</td></tr>
+      <tr><td><code>commander</code></td><td>CLI argument parsing</td></tr>
+      <tr><td><code>ink</code></td><td>React-based terminal UI framework</td></tr>
+      <tr><td><code>react</code></td><td>Component model for Ink (v17)</td></tr>
+      <tr><td><code>chalk</code></td><td>Terminal string styling</td></tr>
+    </table>
+
+    <footer>
+      <p><a href="/courier-service/">← Back to Courier Service</a> · <a href="https://github.com/nurulizyansyaza/courier-service-cli">Source on GitHub</a></p>
+    </footer>
+  </div>
+</body>
+</html>

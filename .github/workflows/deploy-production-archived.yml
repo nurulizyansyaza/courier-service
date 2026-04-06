@@ -1,0 +1,363 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: What to deploy
+        required: true
+        type: choice
+        options:
+          - all
+          - api-only
+          - frontend-only
+      framework:
+        description: Active frontend framework
+        required: false
+        type: choice
+        default: react
+        options:
+          - react
+          - vue
+          - svelte
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-southeast-1
+  ENVIRONMENT: production
+  CORE_REF: main
+  CLI_REF: main
+  API_REF: main
+  FRONTEND_REF: main
+
+jobs:
+  # ── Run Tests First ────────────────────────────────────────────────
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-cli
+          ref: ${{ env.CLI_REF }}
+          path: courier-service-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-api
+          ref: ${{ env.API_REF }}
+          path: courier-service-api
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-frontend
+          ref: ${{ env.FRONTEND_REF }}
+          path: courier-service-frontend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test Core
+        run: cd courier-service-core && npm ci && npm run build && npm test
+
+      - name: Test CLI
+        run: cd courier-service-cli && npm ci && npm test
+
+      - name: Test API
+        run: cd courier-service-api && npm ci && npm test
+
+      - name: Test Frontend
+        run: |
+          cd courier-service-frontend && npm ci
+          echo '{"framework":"react"}' > framework.config.json
+          node -e "
+            const fs = require('fs');
+            const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf-8'));
+            tsconfig.compilerOptions.jsx = 'react-jsx';
+            tsconfig.include = ['src/core', 'src/react', 'src/vite-env.d.ts'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(tsconfig, null, 2) + '\n');
+          "
+          npm test
+
+  # ── Deploy Infrastructure ──────────────────────────────────────────
+  infra:
+    name: Ensure Infrastructure
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event.inputs.deploy_target == 'all'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy API Stack
+        run: |
+          STACK_NAME="courier-api-${{ env.ENVIRONMENT }}"
+          REGION="${{ env.AWS_REGION }}"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" --region "$REGION" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          echo "Current stack status: $STATUS"
+          if [[ "$STATUS" == *_IN_PROGRESS ]]; then
+            echo "Stack operation in progress — waiting for completion..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || true
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" --region "$REGION" \
+              --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+            echo "Stack status after wait: $STATUS"
+          fi
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "CREATE_FAILED" ]; then
+            echo "Stack in $STATUS — deleting before redeploy..."
+            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
+          fi
+          aws cloudformation deploy \
+            --template-file infra/cloudformation/api-stack.yml \
+            --stack-name "$STACK_NAME" \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} DesiredCount=0 \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --region "$REGION"
+
+      - name: Get API Gateway domain
+        id: api-domain
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name "courier-api-${{ env.ENVIRONMENT }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiGatewayURL'].OutputValue" \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$API_URL" ] && [ "$API_URL" != "None" ]; then
+            API_DOMAIN=$(echo "$API_URL" | sed 's|https://||' | cut -d'/' -f1)
+            echo "domain=$API_DOMAIN" >> "$GITHUB_OUTPUT"
+            echo "API Gateway domain: $API_DOMAIN"
+          else
+            echo "No API Gateway found — skipping API proxy setup"
+          fi
+
+      - name: Deploy Frontend Stack
+        run: |
+          STACK_NAME="courier-frontend-${{ env.ENVIRONMENT }}"
+          REGION="us-east-1"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" --region "$REGION" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          echo "Current stack status: $STATUS"
+          if [[ "$STATUS" == *_IN_PROGRESS ]]; then
+            echo "Stack operation in progress — waiting..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
+              || true
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" --region "$REGION" \
+              --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          fi
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "CREATE_FAILED" ]; then
+            echo "Stack in $STATUS — deleting..."
+            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
+          fi
+          PARAMS="Environment=${{ env.ENVIRONMENT }}"
+          if [ -n "${{ steps.api-domain.outputs.domain }}" ]; then
+            PARAMS="$PARAMS ApiGatewayDomain=${{ steps.api-domain.outputs.domain }}"
+          fi
+          aws cloudformation deploy \
+            --template-file infra/cloudformation/frontend-stack.yml \
+            --stack-name "$STACK_NAME" \
+            --parameter-overrides $PARAMS \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --region "$REGION"
+
+  # ── Deploy API (Docker → ECR → ECS) ────────────────────────────────
+  deploy-api:
+    name: Deploy API
+    needs: [test, infra]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      needs.test.result == 'success' &&
+      (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
+      (github.event.inputs.deploy_target != 'frontend-only')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: courier-service
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-cli
+          ref: ${{ env.CLI_REF }}
+          path: courier-service-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-api
+          ref: ${{ env.API_REF }}
+          path: courier-service-api
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECR URI
+        id: ecr-uri
+        run: |
+          ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name courier-api-${{ env.ENVIRONMENT }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ECRRepositoryUri'].OutputValue" \
+            --output text)
+          echo "uri=$ECR_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          docker build \
+            -f courier-service/Dockerfile \
+            -t "${{ steps.ecr-uri.outputs.uri }}:${IMAGE_TAG}" \
+            -t "${{ steps.ecr-uri.outputs.uri }}:latest" \
+            .
+          docker push "${{ steps.ecr-uri.outputs.uri }}:${IMAGE_TAG}"
+          docker push "${{ steps.ecr-uri.outputs.uri }}:latest"
+
+      - name: Update ECS service
+        run: |
+          CLUSTER=$(aws cloudformation describe-stacks \
+            --stack-name courier-api-${{ env.ENVIRONMENT }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ECSClusterName'].OutputValue" \
+            --output text)
+          SERVICE=$(aws cloudformation describe-stacks \
+            --stack-name courier-api-${{ env.ENVIRONMENT }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ECSServiceName'].OutputValue" \
+            --output text)
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --desired-count 1 \
+            --force-new-deployment \
+            --no-cli-pager
+
+      - name: Print API URL
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name courier-api-${{ env.ENVIRONMENT }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiGatewayURL'].OutputValue" \
+            --output text)
+          echo "::notice::API deployed to $API_URL"
+          echo "Health check: $API_URL/api/health"
+
+  # ── Deploy Frontend (Build all frameworks → S3 → CloudFront) ───────
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: [test, infra]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      needs.test.result == 'success' &&
+      (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
+      (github.event.inputs.deploy_target != 'api-only')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: courier-service
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-core
+          ref: ${{ env.CORE_REF }}
+          path: courier-service-core
+      - uses: actions/checkout@v4
+        with:
+          repository: nurulizyansyaza/courier-service-frontend
+          ref: ${{ env.FRONTEND_REF }}
+          path: courier-service-frontend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: |
+          cd courier-service-core && npm ci && npm run build
+          cd ../courier-service-frontend && npm ci
+
+      - name: Get S3 bucket and distribution ID
+        id: frontend-stack
+        run: |
+          STACK="courier-frontend-${{ env.ENVIRONMENT }}"
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK" --region us-east-1 \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
+          DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK" --region us-east-1 \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" --output text)
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "dist_id=$DIST_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and deploy React
+        run: |
+          cd courier-service-frontend
+          npm run use:react && npx vite build --base=/react/
+          aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/react/ \
+            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
+          aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/react/index.html \
+            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html" --region us-east-1
+
+      - name: Build and deploy Vue
+        run: |
+          cd courier-service-frontend
+          npm run use:vue && npx vite build --base=/vue/
+          aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/vue/ \
+            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
+          aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/vue/index.html \
+            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html" --region us-east-1
+
+      - name: Build and deploy Svelte
+        run: |
+          cd courier-service-frontend
+          npm run use:svelte && npx vite build --base=/svelte/
+          aws s3 sync dist/ s3://${{ steps.frontend-stack.outputs.bucket }}/svelte/ \
+            --delete --cache-control "public, max-age=31536000, immutable" --exclude "index.html" --region us-east-1
+          aws s3 cp dist/index.html s3://${{ steps.frontend-stack.outputs.bucket }}/svelte/index.html \
+            --cache-control "public, max-age=0, must-revalidate" --content-type "text/html" --region us-east-1
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.frontend-stack.outputs.dist_id }} \
+            --paths "/*" --no-cli-pager
+
+      - name: Print Frontend URL
+        run: |
+          STACK="courier-frontend-${{ env.ENVIRONMENT }}"
+          URL=$(aws cloudformation describe-stacks --stack-name "$STACK" --region us-east-1 \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendURL'].OutputValue" --output text)
+          echo "::notice::Frontend deployed to $URL"

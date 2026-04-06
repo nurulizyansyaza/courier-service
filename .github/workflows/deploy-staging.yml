@@ -1,4 +1,4 @@
-name: Deploy Production
+name: Deploy Staging
 
 on:
   workflow_dispatch:
@@ -20,13 +20,18 @@ on:
           - react
           - vue
           - svelte
+  workflow_call:
+    inputs:
+      deploy_target:
+        type: string
+        default: all
 
 permissions:
   contents: read
 
 env:
   HOMELAB_DEPLOY_PATH: /opt/courier-service
-  ENVIRONMENT: production
+  ENVIRONMENT: staging
   CORE_REF: main
   CLI_REF: main
   API_REF: main
@@ -85,12 +90,12 @@ jobs:
           "
           npm test
 
-  # ── Deploy API (Docker build → SSH transfer → restart) ─────────────
+  # ── Deploy Staging API ─────────────────────────────────────────────
   deploy-api:
-    name: Deploy API
+    name: Deploy Staging API
     needs: test
     runs-on: ubuntu-latest
-    if: github.event.inputs.deploy_target != 'frontend-only'
+    if: inputs.deploy_target != 'frontend-only'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,7 +125,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          IMAGE_TAG="courier-service-api:${{ github.sha }}"
+          IMAGE_TAG="courier-service-api:staging-${{ github.sha }}"
           docker build \
             -f courier-service/Dockerfile \
             -t "$IMAGE_TAG" \
@@ -139,37 +144,37 @@ jobs:
           scp courier-service/infra/nginx/nginx.conf \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/
 
-      - name: Copy static pages
+      - name: Copy staging static pages
         run: |
-          scp courier-service/static/index.html \
+          scp courier-service/static/index-staging.html \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/static/
-          scp courier-service/static/cli.html \
+          scp courier-service/static/cli-staging.html \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/static/
 
-      - name: Restart API service
+      - name: Restart staging API service
         run: |
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
             set -euo pipefail
             cd ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service
-            docker compose -f docker-compose.prod.yml up -d --no-deps courier-api
+            docker compose -f docker-compose.prod.yml up -d --no-deps courier-api-staging
             sleep 5
-            curl -sf http://localhost:3000/api/health || exit 1
-            echo "::notice::API deployed successfully"
+            curl -sf http://localhost:3001/api/health || exit 1
+            echo "::notice::Staging API deployed successfully"
           EOF
 
       - name: Reload Nginx
         run: |
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
 
-      - name: Print API URL
-        run: echo "::notice::API deployed to https://${{ secrets.HOMELAB_HOST }}/courier-service/api/health"
+      - name: Print staging API URL
+        run: echo "::notice::Staging API deployed to https://${{ secrets.HOMELAB_HOST }}/staging/courier-service/api/health"
 
-  # ── Deploy Frontend (Build all frameworks → rsync to homelab) ───────
+  # ── Deploy Staging Frontend ────────────────────────────────────────
   deploy-frontend:
-    name: Deploy Frontend
+    name: Deploy Staging Frontend
     needs: test
     runs-on: ubuntu-latest
-    if: github.event.inputs.deploy_target != 'api-only'
+    if: inputs.deploy_target != 'api-only'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -205,29 +210,29 @@ jobs:
         run: |
           cd courier-service-frontend
           npm run use:react
-          VITE_API_BASE_URL=/courier-service/api npx vite build --base=/courier-service/frontend/react/
+          VITE_API_BASE_URL=/staging/courier-service/api npx vite build --base=/staging/courier-service/frontend/react/
           rsync -az --delete dist/ \
-            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/react/
+            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/staging/react/
 
       - name: Build and deploy Vue
         run: |
           cd courier-service-frontend
           npm run use:vue
-          VITE_API_BASE_URL=/courier-service/api npx vite build --base=/courier-service/frontend/vue/
+          VITE_API_BASE_URL=/staging/courier-service/api npx vite build --base=/staging/courier-service/frontend/vue/
           rsync -az --delete dist/ \
-            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/vue/
+            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/staging/vue/
 
       - name: Build and deploy Svelte
         run: |
           cd courier-service-frontend
           npm run use:svelte
-          VITE_API_BASE_URL=/courier-service/api npx vite build --base=/courier-service/frontend/svelte/
+          VITE_API_BASE_URL=/staging/courier-service/api npx vite build --base=/staging/courier-service/frontend/svelte/
           rsync -az --delete dist/ \
-            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/svelte/
+            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/staging/svelte/
 
       - name: Reload Nginx
         run: |
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
 
-      - name: Print Frontend URL
-        run: echo "::notice::Frontend deployed to https://${{ secrets.HOMELAB_HOST }}/courier-service/frontend/"
+      - name: Print staging frontend URL
+        run: echo "::notice::Staging frontend deployed to https://${{ secrets.HOMELAB_HOST }}/staging/courier-service/frontend/"

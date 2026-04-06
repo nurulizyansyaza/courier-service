@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courier Service CLI — Staging</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #d29922;
+      --green: #3fb950;
+      --orange: #d29922;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .staging-banner {
+      background: rgba(210, 153, 34, 0.15);
+      border: 1px solid var(--orange);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1.5rem;
+      color: var(--orange);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .breadcrumb { color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem; }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    h2 { font-size: 1.25rem; margin: 2rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--accent); }
+    p { margin-bottom: 0.75rem; }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+    code { font-family: 'SF Mono', 'Fira Code', monospace; }
+    p code, li code {
+      background: var(--surface);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    th { color: var(--text-muted); font-weight: 600; }
+    ul { margin-left: 1.5rem; margin-bottom: 0.75rem; }
+    li { margin-bottom: 0.25rem; }
+    footer { color: var(--text-muted); font-size: 0.8rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <p class="breadcrumb"><a href="/staging/courier-service/">← Staging Home</a></p>
+    <h1>📟 Courier Service CLI</h1>
+    <div class="staging-banner">⚠️ STAGING ENVIRONMENT — This is a pre-production deployment for testing.</div>
+    <p>Interactive terminal UI for the Courier Service delivery cost and time calculator. Built with <a href="https://github.com/vadimdemedes/ink" style="color: var(--accent);">Ink</a> (React for the terminal).</p>
+
+    <h2>Setup</h2>
+
+    <h3>Prerequisites</h3>
+    <ul>
+      <li><strong>Node.js</strong> 18 or 20</li>
+      <li><strong>npm</strong></li>
+      <li><strong>courier-service-core</strong> must be built first</li>
+    </ul>
+
+    <h3>Quick Start</h3>
+    <pre><code>cd courier-service-core && npm install && npm run build && cd ..
+cd courier-service-cli && npm install
+npm start</code></pre>
+
+    <h2>Usage</h2>
+
+    <h3>Commands</h3>
+    <table>
+      <tr><th>Command</th><th>Description</th></tr>
+      <tr><td><code>/change mode cost | time</code></td><td>Switch calculation mode</td></tr>
+      <tr><td><code>clear</code></td><td>Clear screen</td></tr>
+      <tr><td><code>help</code></td><td>Show commands</td></tr>
+      <tr><td><code>exit</code></td><td>Exit</td></tr>
+    </table>
+
+    <h3>Example</h3>
+    <pre><code>100 3
+pkg1 50 70 ofr001
+pkg2 75 70 ofr003
+pkg3 100 200 ofr002
+2 70 200</code></pre>
+
+    <p>Full documentation: <a href="/courier-service/cli" style="color: var(--accent);">Production CLI docs →</a></p>
+
+    <footer>
+      <p><a href="/staging/courier-service/">← Staging Home</a> · <a href="/courier-service/cli">Production CLI Docs</a></p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,11 +1,11 @@
 # Courier Service
 
-Orchestration repo for the **Courier Service** App Calculator. Ties together the core library, CLI app, Express API and frontend dashboard with CI/CD, Docker and AWS deployment.
+Orchestration repo for the **Courier Service** App Calculator. Ties together the core library, CLI app, Express API and frontend dashboard with CI/CD, Docker and homelab deployment.
 
 ## Architecture
 
 ```
-courier-service/          ← this repo (CI/CD + Docker + AWS infra)
+courier-service/          ← this repo (CI/CD + Docker + Homelab infra)
 courier-service-core/     ← NPM package: cost, offers, shipment planning (147 tests)
 courier-service-cli/      ← Interactive CLI with Ink TUI (124 tests)
 courier-service-api/      ← Express REST API with security middleware (33 tests)
@@ -123,393 +123,59 @@ sequenceDiagram
     FE-->>U: Display results with delivery times
 ```
 
-### AWS Staging / Production Architecture
+### Homelab Production Architecture
 
 ```mermaid
 graph TB
-    Browser["🌐 Browser"] --> CF["CloudFront CDN<br/>+ Shield Standard"]
+    Browser["🌐 Browser"] --> HostNginx["Host Nginx<br/>nurulizyansyaza.com"]
 
-    subgraph AWS["AWS Cloud"]
-        CF --> WAF_CF["WAF · Rate limit · XSS · Bad inputs"]
-        WAF_CF --> S3Route["/* → S3 Origin"]
-        WAF_CF --> ApiRoute["/api/* → API Gateway"]
+    subgraph Homelab["Homelab Server"]
+        HostNginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
 
-        S3Route --> S3["S3 Bucket"]
-        S3 --> React["/react/"]
-        S3 --> Vue["/vue/"]
-        S3 --> Svelte["/svelte/"]
+        RateLimit --> Landing["/courier-service/ → Landing Page"]
+        RateLimit --> ApiRoute["/courier-service/api/* → API Proxy"]
+        RateLimit --> FERoute["/courier-service/frontend/* → Static Files"]
+        RateLimit --> CLIRoute["/courier-service/cli → CLI Docs"]
 
-        ApiRoute --> APIGW["REST API Gateway"]
-        APIGW --> WAF_API["WAF · Rate limit · Common rules"]
-        WAF_API --> VPCLink["VPC Link"]
-        VPCLink --> NLB["NLB (internal)"]
-        NLB --> ECS["ECS Fargate<br/>Docker container"]
+        FERoute --> FrontendFiles["Frontend Builds (disk)"]
+        FrontendFiles --> React["/courier-service/frontend/react/"]
+        FrontendFiles --> Vue["/courier-service/frontend/vue/"]
+        FrontendFiles --> Svelte["/courier-service/frontend/svelte/"]
 
-        ECR["ECR"] -.->|"image"| ECS
-        ECS -.->|"logs"| CW["CloudWatch<br/>14-day retention"]
+        ApiRoute --> API["Docker: courier-api<br/>Express on :3000"]
+        RateLimit --> StagingAPI["/staging/courier-service/api/*"]
+        StagingAPI --> APIStaging["Docker: courier-api-staging<br/>Express on :3001"]
+
+        API -.->|"logs"| Logs["Docker Logs<br/>json-file driver"]
     end
 ```
 
-**Endpoints** — no custom domain; all use AWS-generated URLs:
+**Endpoints** — served from homelab at `nurulizyansyaza.com`:
 
-| Environment | Frontend | API (direct) | API (via CloudFront) |
-|---|---|---|---|
-| **Production** | [`d31r5a2wvtwynh.cloudfront.net`](https://d31r5a2wvtwynh.cloudfront.net) | `r7b86qfm3h.execute-api.ap-southeast-1.amazonaws.com/production` | `d31r5a2wvtwynh.cloudfront.net/api/*` |
-| **Staging** | [`d28gbmf77bx81u.cloudfront.net`](https://d28gbmf77bx81u.cloudfront.net) | `r7b86qfm3h.execute-api.ap-southeast-1.amazonaws.com/staging` | `d28gbmf77bx81u.cloudfront.net/api/*` |
+| Environment | Landing Page | Frontend | API | Health Check |
+|---|---|---|---|---|
+| **Production** | `/courier-service/` | `/courier-service/frontend/react/` | `/courier-service/api/*` | `/courier-service/api/health` |
+| **Staging** | `/staging/courier-service/` | `/staging/courier-service/frontend/react/` | `/staging/courier-service/api/*` | `/staging/courier-service/api/health` |
 
-### API Proxy via CloudFront
+### API Proxy via Nginx
 
-The frontend uses relative `/api/*` URLs for API calls. CloudFront proxies these requests to API Gateway, so the same relative URLs work identically in development (Vite proxy) and production (CloudFront proxy):
+The frontend uses `/courier-service/api/*` URLs for API calls. The host Nginx strips the `/courier-service` prefix and proxies to the Docker API container:
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant CF as CloudFront
-    participant AG as API Gateway
-    participant NLB as NLB
-    participant ECS as ECS Fargate
+    participant N as Host Nginx
+    participant API as Docker: courier-api
 
-    B->>CF: POST /api/cost
-    CF->>AG: Forward (OriginPath: /production)
-    AG->>NLB: VPC Link
-    NLB->>ECS: TCP :3000
-    ECS-->>NLB: JSON response
-    NLB-->>AG: Response
-    AG-->>CF: Response
-    CF-->>B: JSON result
+    B->>N: POST /courier-service/api/cost
+    N->>API: proxy_pass http://127.0.0.1:3000/api/cost
+    API-->>N: JSON response
+    N-->>B: JSON result
 ```
 
 Configuration:
-- **ApiGatewayDomain** parameter passed to `frontend-stack.yml` during deploy
-- **CachingDisabled** policy on `/api/*` — API responses are never cached
-- **AllViewerExceptHostHeader** origin request policy — forwards all headers except Host
-- If no API Gateway domain is provided, the proxy origin is skipped (conditional via `HasApiGateway`)
-
-## Setup
-
-### Prerequisites
-
-| Tool | Version | How to check |
-|---|---|---|
-| **Node.js** | 18 or 20 (recommended: 20) | `node --version` |
-| **npm** | Comes with Node.js | `npm --version` |
-| **Git** | Any recent version | `git --version` |
-| **Docker** | Any recent version (optional) | `docker --version` |
-
-### Step 1 — Clone all repos
-
-Create a project folder and clone all repos into it:
-
-```bash
-mkdir courier-service-project
-cd courier-service-project
-
-git clone https://github.com/nurulizyansyaza/courier-service.git
-git clone https://github.com/nurulizyansyaza/courier-service-core.git
-git clone https://github.com/nurulizyansyaza/courier-service-api.git
-git clone https://github.com/nurulizyansyaza/courier-service-cli.git
-git clone https://github.com/nurulizyansyaza/courier-service-frontend.git
-```
-
-Your folder should now look like:
-
-```
-courier-service-project/
-├── courier-service/           ← this repo
-├── courier-service-core/
-├── courier-service-api/
-├── courier-service-cli/
-└── courier-service-frontend/
-```
-
-### Step 2 — Install and build
-
-> **Important:** Build the core library **first** — all other repos depend on it.
-
-```bash
-# 1. Core library (must be first)
-cd courier-service-core
-npm ci
-npm run build
-cd ..
-
-# 2. API
-cd courier-service-api
-npm ci
-npm run build
-cd ..
-
-# 3. CLI
-cd courier-service-cli
-npm ci
-cd ..
-
-# 4. Frontend
-cd courier-service-frontend
-npm ci
-cd ..
-```
-
-### Step 3 — Verify it works
-
-```bash
-# Run the API
-cd courier-service-api && npm run dev &
-
-# Wait a moment, then check the health endpoint
-sleep 2 && curl http://localhost:3000/api/health
-# Should print: {"status":"ok"}
-```
-
-> **See also:** [INTRO.md](INTRO.md) for full step-by-step instructions with example test data and API requests.
-
-## Docker
-
-### Development (with hot-reload)
-
-Start all services with one command — no manual install needed:
-
-```bash
-cd courier-service
-docker compose -f docker-compose.dev.yml up
-```
-
-This starts the core watcher, API (`http://localhost:3000`) and frontend (`http://localhost:5173`) with hot-reload.
-
-```bash
-# Run the CLI
-docker compose -f docker-compose.dev.yml run --rm cli
-
-# Run all 561 tests
-docker compose -f docker-compose.dev.yml run --rm test
-
-# Run tests for a single repo
-docker compose -f docker-compose.dev.yml run --rm test-core
-
-# Port conflicts? Change the port
-API_PORT=3001 FE_PORT=5174 docker compose -f docker-compose.dev.yml up
-
-# Stop everything
-docker compose -f docker-compose.dev.yml down
-```
-
-> Source files are mounted as volumes — edit code on your machine and changes are picked up automatically.
-
-### Production
-
-All environments (staging, production) use the same multi-stage Dockerfile:
-
-```bash
-# Build from project root (the folder containing all repos)
-docker build -f courier-service/Dockerfile -t courier-service .
-
-# Run the API server
-docker run -p 3000:3000 courier-service
-
-# Test it
-curl http://localhost:3000/api/health
-
-# Run CLI interactively
-docker run -it --entrypoint node courier-service courier-service-cli/bin/courier-service --local
-```
-
-> **Note:** The CLI needs `-it` flags for interactive terminal UI. For non-interactive usage, use the API endpoints.
-
-### Docker Compose (production)
-
-```bash
-docker compose up courier-api              # Start API server on port 3000
-docker compose run -it courier-service     # Run CLI interactively
-```
-
-### Docker Image Details
-
-| Stage | Base | Purpose |
-|-------|------|---------|
-| Build | `node:20-alpine` | Install deps, compile TypeScript for core, CLI, and API |
-| Runtime | `node:20-alpine` | Production deps only + compiled JS. ~60MB image |
-
-The runtime image includes:
-- `EXPOSE 3000` — API port
-- `HEALTHCHECK` — `wget` to `/api/health` every 30s
-- `CMD` — defaults to running the API server
-- `NODE_ENV=production`
-- Graceful shutdown on `SIGTERM`/`SIGINT` — closes connections cleanly before ECS task stops
-
-## AWS Deployment
-
-### Prerequisites
-
-1. **AWS CLI** installed and configured (`aws configure`)
-2. **Docker** running locally (for building/pushing images)
-3. **GitHub Secrets** set on the `courier-service` repo:
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY`
-
-### Step 1: Deploy Infrastructure
-
-Creates all AWS resources (S3, CloudFront, VPC, ECS, NLB, REST API Gateway, WAF):
-
-```bash
-cd courier-service
-./scripts/deploy-infra.sh production
-```
-
-This deploys two CloudFormation stacks:
-- `courier-frontend-production` — S3 + CloudFront + WAF + API proxy origin
-- `courier-api-production` — ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF
-
-### Step 2: Deploy API
-
-Builds the Docker image, pushes to ECR, and updates the ECS service:
-
-```bash
-./scripts/deploy-api.sh production
-```
-
-### Step 3: Deploy Frontend
-
-Builds all 3 frameworks (React, Vue, Svelte) and uploads to S3:
-
-```bash
-./scripts/deploy-frontend.sh production
-```
-
-### Frontend Framework Switching
-
-All three frameworks (React, Vue, Svelte) are deployed simultaneously to S3 and served via CloudFront:
-
-```
-https://d31r5a2wvtwynh.cloudfront.net/react/   ← React build
-https://d31r5a2wvtwynh.cloudfront.net/vue/     ← Vue build
-https://d31r5a2wvtwynh.cloudfront.net/svelte/  ← Svelte build
-```
-
-A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g. `/react/some-path`) to the framework's `index.html`. The root URL (`/`) redirects to the default framework (configured via `DefaultFramework` parameter).
-
-**Framework switching is per-user**: each user types `use vue` or `use svelte` in their terminal UI, which navigates their browser to `/<framework>/`. Other users are unaffected.
-
-### CI/CD Deployment
-
-**Production** (this branch) — manual only via `workflow_dispatch`:
-
-```bash
-gh workflow run deploy-production.yml --ref main -f deploy_target=all
-```
-
-This deploys to separate CloudFormation stacks (`courier-frontend-production`, `courier-api-production`) on the same AWS account as staging. All sub-repos are checked out from their `main` branch.
-
-1. Runs all tests (core, CLI, API, frontend)
-2. Deploys/updates CloudFormation stacks
-3. Builds and pushes Docker image to ECR
-4. Updates ECS Fargate service
-5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
-6. Invalidates CloudFront cache
-
-**Staging** — lives on the `staging` branch. Sub-repo CI auto-triggers staging deploys (from sub-repo `main` branches) via `gh workflow run`. Once staging is verified, merge `staging` → `main` and deploy production manually. See the staging branch README for details.
-
-### AWS Services Used
-
-| Service | Purpose | Cost |
-|---------|---------|------|
-| **S3** | Frontend static hosting (React/Vue/Svelte builds) | Free tier: 5GB |
-| **CloudFront** | CDN + HTTPS for frontend | Free tier: 1TB/mo |
-| **API Gateway** | REST API proxy to ECS via VPC Link + NLB | Free tier: 1M calls/mo |
-| **ECS Fargate** | Serverless Docker container for API | ~$0.04/hr (0.25 vCPU) |
-| **ECR** | Docker image registry | Free tier: 500MB |
-| **NLB** | Network load balancer for ECS tasks (internal) | Free tier: 750 hrs/mo |
-| **WAF** | Rate limiting + managed rules (XSS, bad inputs) | ~$5/mo per WebACL |
-| **Shield Standard** | DDoS protection on CloudFront | Free |
-| **CloudWatch Logs** | Container logs (14-day retention) | Free tier: 5GB |
-
-### Infrastructure Files
-
-```
-infra/
-  cloudformation/
-    frontend-stack.yml   # S3 + CloudFront + CloudFront Function (SPA routing) + API proxy origin + WAF
-    api-stack.yml        # ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF (REGIONAL)
-  env/
-    production.env       # Production config (region, stack names, default framework)
-scripts/
-  deploy-infra.sh        # Deploy/update CloudFormation stacks
-  deploy-api.sh          # Build Docker → push ECR → update ECS
-  deploy-frontend.sh     # Build all frameworks (--base=/<fw>/) → S3 → invalidate CloudFront
-  switch-framework.sh    # Legacy: switch framework via CloudFront origin path
-```
-
-## CI/CD
-
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR:
-
-1. **test-core** — installs and tests `courier-service-core` (Node 18 + 20, 147 tests)
-2. **test-cli** — installs core + CLI, runs CLI tests (Node 18 + 20, 124 tests)
-3. **test-api** — installs core + API, runs API tests (Node 18 + 20, 33 tests)
-4. **test-frontend** — type-checks, tests, and builds the frontend (Node 20, 257 tests)
-5. **test-system** — verifies core library outputs and API cost endpoint
-
-Production deployment (`.github/workflows/deploy-production.yml`) — manual `workflow_dispatch` only:
-
-```bash
-gh workflow run deploy-production.yml --ref main -f deploy_target=all
-```
-
-### Deployment Flow
-
-```mermaid
-graph LR
-    Push["Push to sub-repo<br/>main branch"] --> CI["Sub-repo CI<br/>tests pass"]
-    CI -->|"auto-trigger"| Staging["Deploy Staging<br/>(staging branch)"]
-    Staging --> Test["Test on staging"]
-    Test -->|"manual dispatch"| Prod["Deploy Production<br/>(main branch)"]
-```
-
-## Security
-
-### Express Middleware (Application Layer)
-
-| Layer | Protection |
-|-------|-----------|
-| **Helmet** | Security headers against XSS, clickjacking, MIME sniffing |
-| **CORS** | Origin whitelist (localhost dev + CloudFront distributions) |
-| **Rate Limiting** | Global: 100 req/15min, Calculations: 30 req/min |
-| **Zod Validation** | Schema-based input validation (type safety, length limits, all errors returned) |
-| **Body Size Limit** | 100kb max request body |
-| **Morgan** | HTTP request logging |
-
-### AWS Infrastructure (Network Layer)
-
-| Layer | Protection |
-|-------|-----------|
-| **AWS WAF** | Rate limiting (1000-2000 req/5min per IP), managed rule sets |
-| **AWS Shield Standard** | Automatic DDoS protection (free on CloudFront) |
-| **CloudFront** | HTTPS-only, TLS 1.2+, HTTP/2+3 |
-| **REST API Gateway** | Request throttling, payload size limits, WAF integration |
-| **VPC** | Network isolation for ECS tasks, security groups |
-| **NLB** | Internal load balancer, no public exposure |
-| **ECR Image Scanning** | Vulnerability scanning on push |
-| **S3 OAC** | Bucket accessible only via CloudFront (no direct S3 URL) |
-
-## Shared Dependency Model
-
-All three consumer packages depend on `@nurulizyansyaza/courier-service-core` via `file:../courier-service-core`:
-
-```
-courier-service-core (source of truth)
-  ├── courier-service-api    → direct import, no fallback needed
-  ├── courier-service-cli    → API-first + local core fallback
-  └── courier-service-frontend → API-first + local core fallback
-```
-
-- **Zero logic duplication** — parsing, cost calculation, delivery planning, transit conflict resolution, and offer validation all live in core
-- **Centralized constants** — magic numbers (weight/distance multipliers, package limits) and shared regex patterns defined once in `constants.ts`
-- **API-first with fallback** — CLI and frontend try the API first; if unreachable, run the same core functions locally
-- When core is updated, all consumers get the changes after `npm ci` / rebuild
-- CI builds core first, then runs downstream tests to catch breaking changes
-
-## Related Repos
-
-- [courier-service-core](https://github.com/nurulizyansyaza/courier-service-core) — Core logic NPM package (147 tests)
-- [courier-service-cli](https://github.com/nurulizyansyaza/courier-service-cli) — CLI application with Ink TUI (124 tests)
-- [courier-service-api](https://github.com/nurulizyansyaza/courier-service-api) — Express REST API with Bruno test collection (33 tests)
-- [courier-service-frontend](https://github.com/nurulizyansyaza/courier-service-frontend) — React/Vue/Svelte dashboard (257 tests)
+- **Host Nginx reverse proxy** to Docker containers (prod :3000, staging :3001)
+- **Nginx is not containerized** — it runs on the host, serving the personal site and project routes
+- **No caching** on `/courier-service/api/*` — API responses are never cached
+- **Rate limiting** — 60 req/min on API routes, 200 req/min global
+- If API container is unhealthy, Nginx returns 502
