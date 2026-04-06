@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courier Service — Staging</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #d29922;
+      --accent-hover: #e3b341;
+      --green: #3fb950;
+      --orange: #d29922;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .staging-banner {
+      background: rgba(210, 153, 34, 0.15);
+      border: 1px solid var(--orange);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1.5rem;
+      color: var(--orange);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 1.1rem; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      text-decoration: none;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card h3 { color: var(--accent); margin-bottom: 0.5rem; font-size: 1rem; }
+    .card p { color: var(--text-muted); font-size: 0.875rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--orange);
+    }
+    footer { color: var(--text-muted); font-size: 0.8rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    @media (max-width: 600px) { .card-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1><span style="font-size: 1.8rem;">📦</span> Courier Service</h1>
+    <div class="staging-banner">⚠️ STAGING ENVIRONMENT — This is a pre-production deployment for testing.</div>
+    <p class="subtitle">Delivery cost and time estimation system — <a href="/courier-service/" style="color: var(--accent); text-decoration: none;">Go to Production →</a></p>
+
+    <div class="card-grid">
+      <a class="card" href="/staging/courier-service/api/health">
+        <h3>API <span class="badge">Staging</span></h3>
+        <p>REST API for cost and delivery time calculations.</p>
+      </a>
+      <a class="card" href="/staging/courier-service/frontend/react/">
+        <h3>Frontend — React <span class="badge">Staging</span></h3>
+        <p>Interactive web UI built with React.</p>
+      </a>
+      <a class="card" href="/staging/courier-service/frontend/vue/">
+        <h3>Frontend — Vue <span class="badge">Staging</span></h3>
+        <p>Same UI rebuilt in Vue 3.</p>
+      </a>
+      <a class="card" href="/staging/courier-service/frontend/svelte/">
+        <h3>Frontend — Svelte <span class="badge">Staging</span></h3>
+        <p>Same UI rebuilt in Svelte.</p>
+      </a>
+      <a class="card" href="/staging/courier-service/cli">
+        <h3>CLI <span class="badge">Docs</span></h3>
+        <p>Interactive terminal UI documentation.</p>
+      </a>
+    </div>
+
+    <footer>
+      <p><a href="/courier-service/">← Back to Production</a> · <a href="https://github.com/nurulizyansyaza">github.com/nurulizyansyaza</a></p>
+    </footer>
+  </div>
+</body>
+</html>

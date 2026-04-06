@@ -1,11 +1,11 @@
 # Courier Service
 
-Orchestration repo for the **Courier Service** App Calculator. Ties together the core library, CLI app, Express API and frontend dashboard with CI/CD, Docker and homelab deployment.
+Orchestration repo for the **Courier Service** App Calculator. Ties together the core library, CLI app, Express API and frontend dashboard with CI/CD, Docker and AWS deployment.
 
 ## Architecture
 
 ```
-courier-service/          ← this repo (CI/CD + Docker + Homelab infra)
+courier-service/          ← this repo (CI/CD + Docker + AWS infra)
 courier-service-core/     ← NPM package: cost, offers, shipment planning (147 tests)
 courier-service-cli/      ← Interactive CLI with Ink TUI (124 tests)
 courier-service-api/      ← Express REST API with security middleware (33 tests)
@@ -123,62 +123,67 @@ sequenceDiagram
     FE-->>U: Display results with delivery times
 ```
 
-### Homelab Production Architecture
+### AWS Staging / Production Architecture
 
 ```mermaid
 graph TB
-    Browser["🌐 Browser"] --> HostNginx["Host Nginx<br/>nurulizyansyaza.com"]
+    Browser["🌐 Browser"] --> CF["CloudFront CDN<br/>+ Shield Standard"]
 
-    subgraph Homelab["Homelab Server"]
-        HostNginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
+    subgraph AWS["AWS Cloud"]
+        CF --> WAF_CF["WAF · Rate limit · XSS · Bad inputs"]
+        WAF_CF --> S3Route["/* → S3 Origin"]
+        WAF_CF --> ApiRoute["/api/* → API Gateway"]
 
-        RateLimit --> Landing["/courier-service/ → Landing Page"]
-        RateLimit --> ApiRoute["/courier-service/api/* → API Proxy"]
-        RateLimit --> FERoute["/courier-service/frontend/* → Static Files"]
-        RateLimit --> CLIRoute["/courier-service/cli → CLI Docs"]
+        S3Route --> S3["S3 Bucket"]
+        S3 --> React["/react/"]
+        S3 --> Vue["/vue/"]
+        S3 --> Svelte["/svelte/"]
 
-        FERoute --> FrontendFiles["Frontend Builds (disk)"]
-        FrontendFiles --> React["/courier-service/frontend/react/"]
-        FrontendFiles --> Vue["/courier-service/frontend/vue/"]
-        FrontendFiles --> Svelte["/courier-service/frontend/svelte/"]
+        ApiRoute --> APIGW["REST API Gateway"]
+        APIGW --> WAF_API["WAF · Rate limit · Common rules"]
+        WAF_API --> VPCLink["VPC Link"]
+        VPCLink --> NLB["NLB (internal)"]
+        NLB --> ECS["ECS Fargate<br/>Docker container"]
 
-        ApiRoute --> API["Docker: courier-api<br/>Express on :3000"]
-        RateLimit --> StagingAPI["/staging/courier-service/api/*"]
-        StagingAPI --> APIStaging["Docker: courier-api-staging<br/>Express on :3001"]
-
-        API -.->|"logs"| Logs["Docker Logs<br/>json-file driver"]
+        ECR["ECR"] -.->|"image"| ECS
+        ECS -.->|"logs"| CW["CloudWatch<br/>14-day retention"]
     end
 ```
 
-**Endpoints** — served from homelab at `nurulizyansyaza.com`:
+**Endpoints** — no custom domain; all use AWS-generated URLs:
 
-| Environment | Landing Page | Frontend | API | Health Check |
-|---|---|---|---|---|
-| **Production** | `/courier-service/` | `/courier-service/frontend/react/` | `/courier-service/api/*` | `/courier-service/api/health` |
-| **Staging** | `/staging/courier-service/` | `/staging/courier-service/frontend/react/` | `/staging/courier-service/api/*` | `/staging/courier-service/api/health` |
+| Environment | Frontend | API (direct) | API (via CloudFront) |
+|---|---|---|---|
+| **Production** | [`d31r5a2wvtwynh.cloudfront.net`](https://d31r5a2wvtwynh.cloudfront.net) | `r7b86qfm3h.execute-api.ap-southeast-1.amazonaws.com/production` | `d31r5a2wvtwynh.cloudfront.net/api/*` |
+| **Staging** | [`d28gbmf77bx81u.cloudfront.net`](https://d28gbmf77bx81u.cloudfront.net) | `r7b86qfm3h.execute-api.ap-southeast-1.amazonaws.com/staging` | `d28gbmf77bx81u.cloudfront.net/api/*` |
 
-### API Proxy via Nginx
+### API Proxy via CloudFront
 
-The frontend uses `/courier-service/api/*` URLs for API calls. The host Nginx strips the `/courier-service` prefix and proxies to the Docker API container:
+The frontend uses relative `/api/*` URLs for API calls. CloudFront proxies these requests to API Gateway, so the same relative URLs work identically in development (Vite proxy) and production (CloudFront proxy):
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant N as Host Nginx
-    participant API as Docker: courier-api
+    participant CF as CloudFront
+    participant AG as API Gateway
+    participant NLB as NLB
+    participant ECS as ECS Fargate
 
-    B->>N: POST /courier-service/api/cost
-    N->>API: proxy_pass http://127.0.0.1:3000/api/cost
-    API-->>N: JSON response
-    N-->>B: JSON result
+    B->>CF: POST /api/cost
+    CF->>AG: Forward (OriginPath: /production)
+    AG->>NLB: VPC Link
+    NLB->>ECS: TCP :3000
+    ECS-->>NLB: JSON response
+    NLB-->>AG: Response
+    AG-->>CF: Response
+    CF-->>B: JSON result
 ```
 
 Configuration:
-- **Host Nginx reverse proxy** to Docker containers (prod :3000, staging :3001)
-- **Nginx is not containerized** — it runs on the host, serving the personal site and project routes
-- **No caching** on `/courier-service/api/*` — API responses are never cached
-- **Rate limiting** — 60 req/min on API routes, 200 req/min global
-- If API container is unhealthy, Nginx returns 502
+- **ApiGatewayDomain** parameter passed to `frontend-stack.yml` during deploy
+- **CachingDisabled** policy on `/api/*` — API responses are never cached
+- **AllViewerExceptHostHeader** origin request policy — forwards all headers except Host
+- If no API Gateway domain is provided, the proxy origin is skipped (conditional via `HasApiGateway`)
 
 ## Setup
 
@@ -292,7 +297,7 @@ docker compose -f docker-compose.dev.yml down
 
 ### Production
 
-All environments use the same multi-stage Dockerfile:
+All environments (staging, production) use the same multi-stage Dockerfile:
 
 ```bash
 # Build from project root (the folder containing all repos)
@@ -329,119 +334,108 @@ The runtime image includes:
 - `HEALTHCHECK` — `wget` to `/api/health` every 30s
 - `CMD` — defaults to running the API server
 - `NODE_ENV=production`
-- Graceful shutdown on `SIGTERM`/`SIGINT` — closes connections cleanly before container stops
+- Graceful shutdown on `SIGTERM`/`SIGINT` — closes connections cleanly before ECS task stops
 
-## Homelab Deployment
+## AWS Deployment
 
 ### Prerequisites
 
-1. **Homelab server** running Docker and Docker Compose, with Nginx installed on the host
-2. **SSH access** to the homelab (`ssh deploy@nurulizyansyaza.com`)
-3. **Host Nginx** already serving `nurulizyansyaza.com` — the project is added as location blocks
-4. **GitHub Secrets** set on the `courier-service` repo:
-   - `HOMELAB_SSH_KEY` — SSH private key for the deploy user
-   - `HOMELAB_USER` — SSH username (e.g., `deploy`)
-   - `HOMELAB_HOST` — Hostname or IP of the homelab server
+1. **AWS CLI** installed and configured (`aws configure`)
+2. **Docker** running locally (for building/pushing images)
+3. **GitHub Secrets** set on the `courier-service` repo:
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
 
-### Step 1: Setup Infrastructure
+### Step 1: Deploy Infrastructure
 
-Creates the directory structure, copies config files, and static pages to the homelab:
+Creates all AWS resources (S3, CloudFront, VPC, ECS, NLB, REST API Gateway, WAF):
 
 ```bash
 cd courier-service
 ./scripts/deploy-infra.sh production
 ```
 
-This sets up:
-- Project directories on the homelab (`/opt/courier-service/`)
-- Nginx snippet for sub-path routing (include in host Nginx config)
-- Docker Compose production stack
-- Static landing page and CLI docs page
+This deploys two CloudFormation stacks:
+- `courier-frontend-production` — S3 + CloudFront + WAF + API proxy origin
+- `courier-api-production` — ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF
 
 ### Step 2: Deploy API
 
-Builds the Docker image locally, transfers to homelab, and starts the service:
+Builds the Docker image, pushes to ECR, and updates the ECS service:
 
 ```bash
-./scripts/deploy-api.sh production    # Production (port 3000)
-./scripts/deploy-api.sh staging       # Staging (port 3001)
+./scripts/deploy-api.sh production
 ```
 
 ### Step 3: Deploy Frontend
 
-Builds all 3 frameworks (React, Vue, Svelte) with sub-path base URLs and uploads to homelab:
+Builds all 3 frameworks (React, Vue, Svelte) and uploads to S3:
 
 ```bash
-./scripts/deploy-frontend.sh production    # Builds with --base=/courier-service/frontend/<fw>/
-./scripts/deploy-frontend.sh staging       # Builds with --base=/staging/courier-service/frontend/<fw>/
+./scripts/deploy-frontend.sh production
 ```
 
 ### Frontend Framework Switching
 
-All three frameworks (React, Vue, Svelte) are deployed simultaneously and served via Nginx:
+All three frameworks (React, Vue, Svelte) are deployed simultaneously to S3 and served via CloudFront:
 
 ```
-https://nurulizyansyaza.com/courier-service/frontend/react/    ← React build
-https://nurulizyansyaza.com/courier-service/frontend/vue/      ← Vue build
-https://nurulizyansyaza.com/courier-service/frontend/svelte/   ← Svelte build
+https://d31r5a2wvtwynh.cloudfront.net/react/   ← React build
+https://d31r5a2wvtwynh.cloudfront.net/vue/     ← Vue build
+https://d31r5a2wvtwynh.cloudfront.net/svelte/  ← Svelte build
 ```
 
-The bare `/courier-service/frontend/` URL redirects to the default framework. To switch:
+A **CloudFront Function** handles SPA routing — rewriting non-asset paths (e.g. `/react/some-path`) to the framework's `index.html`. The root URL (`/`) redirects to the default framework (configured via `DefaultFramework` parameter).
 
-```bash
-./scripts/switch-framework.sh vue production
-```
+**Framework switching is per-user**: each user types `use vue` or `use svelte` in their terminal UI, which navigates their browser to `/<framework>/`. Other users are unaffected.
 
 ### CI/CD Deployment
 
-**Production** — manual only via `workflow_dispatch`:
+**Production** (this branch) — manual only via `workflow_dispatch`:
 
 ```bash
 gh workflow run deploy-production.yml --ref main -f deploy_target=all
 ```
 
-**Staging** — triggered automatically by sub-repo CI, or manually:
+This deploys to separate CloudFormation stacks (`courier-frontend-production`, `courier-api-production`) on the same AWS account as staging. All sub-repos are checked out from their `main` branch.
 
-```bash
-gh workflow run deploy-staging.yml --ref main -f deploy_target=all
-```
+1. Runs all tests (core, CLI, API, frontend)
+2. Deploys/updates CloudFormation stacks
+3. Builds and pushes Docker image to ECR
+4. Updates ECS Fargate service
+5. Builds all 3 frontend frameworks (with `--base=/<framework>/`) and uploads to S3
+6. Invalidates CloudFront cache
 
-Both workflows:
-1. Run all tests (core, CLI, API, frontend)
-2. Build and transfer Docker image to homelab via SSH
-3. Build all 3 frontend frameworks (with `--base=/courier-service/frontend/<fw>/`) and rsync to homelab
-4. Reload host Nginx to pick up changes
+**Staging** — lives on the `staging` branch. Sub-repo CI auto-triggers staging deploys (from sub-repo `main` branches) via `gh workflow run`. Once staging is verified, merge `staging` → `main` and deploy production manually. See the staging branch README for details.
 
-### Homelab Stack
+### AWS Services Used
 
-| Component | Purpose | Replaces (AWS) |
-|-----------|---------|----------------|
-| **Host Nginx** | Reverse proxy + static files + rate limiting + sub-path routing | CloudFront + S3 + API Gateway + WAF |
-| **Docker** | API containers (prod + staging) | ECS Fargate + ECR |
-| **Docker Compose** | Service orchestration | CloudFormation |
-| **SSH + rsync** | Deployment | AWS CLI + ECR push + S3 sync |
-| **Docker logs** | Container logging | CloudWatch Logs |
-| **UFW + fail2ban** | Firewall + brute-force protection | AWS Shield + WAF |
+| Service | Purpose | Cost |
+|---------|---------|------|
+| **S3** | Frontend static hosting (React/Vue/Svelte builds) | Free tier: 5GB |
+| **CloudFront** | CDN + HTTPS for frontend | Free tier: 1TB/mo |
+| **API Gateway** | REST API proxy to ECS via VPC Link + NLB | Free tier: 1M calls/mo |
+| **ECS Fargate** | Serverless Docker container for API | ~$0.04/hr (0.25 vCPU) |
+| **ECR** | Docker image registry | Free tier: 500MB |
+| **NLB** | Network load balancer for ECS tasks (internal) | Free tier: 750 hrs/mo |
+| **WAF** | Rate limiting + managed rules (XSS, bad inputs) | ~$5/mo per WebACL |
+| **Shield Standard** | DDoS protection on CloudFront | Free |
+| **CloudWatch Logs** | Container logs (14-day retention) | Free tier: 5GB |
 
 ### Infrastructure Files
 
 ```
 infra/
-  nginx/
-    nginx.conf           # Includable Nginx snippet for sub-path routing
+  cloudformation/
+    frontend-stack.yml   # S3 + CloudFront + CloudFront Function (SPA routing) + API proxy origin + WAF
+    api-stack.yml        # ECR + VPC + ECS Fargate + NLB + REST API Gateway + WAF (REGIONAL)
   env/
-    production.env       # Production config (domain, paths)
-    staging.env          # Staging config
-static/
-  index.html             # Landing page at /courier-service/
-  index-staging.html     # Staging landing page
-  cli.html               # CLI docs page at /courier-service/cli
-  cli-staging.html       # Staging CLI docs
+    production.env       # Production config (region, stack names, default framework)
 scripts/
-  deploy-infra.sh        # Initial homelab setup (directory structure, config files)
-  deploy-api.sh          # Build Docker → SSH transfer → restart (prod or staging)
-  deploy-frontend.sh     # Build all frameworks (--base=/courier-service/frontend/<fw>/) → rsync
-  switch-framework.sh    # Update Nginx default framework redirect + reload
+  deploy-infra.sh        # Deploy/update CloudFormation stacks
+  deploy-api.sh          # Build Docker → push ECR → update ECS
+  deploy-frontend.sh     # Build all frameworks (--base=/<fw>/) → S3 → invalidate CloudFront
+  switch-framework.sh    # Legacy: switch framework via CloudFront origin path
 ```
 
 ## CI/CD
@@ -458,12 +452,6 @@ Production deployment (`.github/workflows/deploy-production.yml`) — manual `wo
 
 ```bash
 gh workflow run deploy-production.yml --ref main -f deploy_target=all
-```
-
-Staging deployment (`.github/workflows/deploy-staging.yml`) — auto-triggered by sub-repos or manual:
-
-```bash
-gh workflow run deploy-staging.yml --ref main -f deploy_target=all
 ```
 
 ### Deployment Flow
@@ -483,23 +471,24 @@ graph LR
 | Layer | Protection |
 |-------|-----------|
 | **Helmet** | Security headers against XSS, clickjacking, MIME sniffing |
-| **CORS** | Origin whitelist (localhost dev + homelab domain) |
+| **CORS** | Origin whitelist (localhost dev + CloudFront distributions) |
 | **Rate Limiting** | Global: 100 req/15min, Calculations: 30 req/min |
 | **Zod Validation** | Schema-based input validation (type safety, length limits, all errors returned) |
 | **Body Size Limit** | 100kb max request body |
 | **Morgan** | HTTP request logging |
 
-### Homelab Infrastructure (Network Layer)
+### AWS Infrastructure (Network Layer)
 
 | Layer | Protection |
 |-------|-----------|
-| **Nginx Rate Limiting** | 200 req/min global, 60 req/min API (per IP) |
-| **UFW Firewall** | Allow only ports 22 (SSH), 80 (HTTP), 443 (HTTPS) |
-| **fail2ban** | Brute-force SSH protection |
-| **Nginx Security Headers** | X-Frame-Options, X-Content-Type-Options, CSP, XSS-Protection |
-| **Docker Network** | API containers bound to localhost, only reachable via host Nginx proxy |
-| **Gzip Compression** | Reduces bandwidth for static assets |
-| **Client Body Limit** | 100kb max request body at Nginx level |
+| **AWS WAF** | Rate limiting (1000-2000 req/5min per IP), managed rule sets |
+| **AWS Shield Standard** | Automatic DDoS protection (free on CloudFront) |
+| **CloudFront** | HTTPS-only, TLS 1.2+, HTTP/2+3 |
+| **REST API Gateway** | Request throttling, payload size limits, WAF integration |
+| **VPC** | Network isolation for ECS tasks, security groups |
+| **NLB** | Internal load balancer, no public exposure |
+| **ECR Image Scanning** | Vulnerability scanning on push |
+| **S3 OAC** | Bucket accessible only via CloudFront (no direct S3 URL) |
 
 ## Shared Dependency Model
 
