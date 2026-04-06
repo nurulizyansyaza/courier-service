@@ -24,10 +24,9 @@ fi
 echo "=== Switching default framework to $FRAMEWORK ($ENVIRONMENT) ==="
 
 # Update the Nginx config's default framework redirect
-# Production: /courier-service/frontend/ → /courier-service/frontend/<framework>/
-# Staging: /staging/courier-service/frontend/ → /staging/courier-service/frontend/<framework>/
+# Redirects /frontend/ → /frontend/<framework>/
 sed -i.bak \
-  "s|return 302 \(.*/courier-service/frontend/\)[a-z]*/;|return 302 \1${FRAMEWORK}/;|g" \
+  "s|return 302 \(.*/frontend/\)[a-z]*/;|return 302 \1${FRAMEWORK}/;|g" \
   "$REPO_ROOT/infra/nginx/nginx.conf"
 rm -f "$REPO_ROOT/infra/nginx/nginx.conf.bak"
 
@@ -39,7 +38,7 @@ ssh "${HOMELAB_USER}@${HOMELAB_HOST}" "sudo nginx -t && sudo systemctl reload ng
 
 echo "✓ Switched to $FRAMEWORK"
 if [[ "$ENVIRONMENT" == "staging" ]]; then
-  echo "URL: https://$HOMELAB_DOMAIN/staging/courier-service/frontend/${FRAMEWORK}/"
+  echo "URL: https://$HOMELAB_DOMAIN/frontend/${FRAMEWORK}/"
 else
-  echo "URL: https://$HOMELAB_DOMAIN/courier-service/frontend/${FRAMEWORK}/"
+  echo "URL: https://$HOMELAB_DOMAIN/frontend/${FRAMEWORK}/"
 fi

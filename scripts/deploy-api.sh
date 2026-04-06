@@ -22,11 +22,11 @@ source "$REPO_ROOT/infra/env/${ENVIRONMENT}.env"
 if [[ "$ENVIRONMENT" == "staging" ]]; then
   CONTAINER_NAME="courier-api-staging"
   API_PORT=3001
-  BASE_PATH="/staging/courier-service"
+  BASE_PATH=""
 else
   CONTAINER_NAME="courier-api"
   API_PORT=3000
-  BASE_PATH="/courier-service"
+  BASE_PATH=""
 fi
 
 IMAGE_TAG="courier-service-api:$(date +%Y%m%d%H%M%S)"
@@ -75,4 +75,4 @@ EOF
 
 echo ""
 echo "=== API deployment complete ($ENVIRONMENT) ==="
-echo "Health check: https://$HOMELAB_DOMAIN${BASE_PATH}/api/health"
+echo "Health check: https://$HOMELAB_DOMAIN/api/health"

@@ -5,7 +5,8 @@
 #   Host Nginx serves static files directly from /opt/courier-service/
 #
 # The host Nginx includes courier-service/infra/nginx/nginx.conf as a snippet
-# for routing /courier-service/* and /staging/courier-service/* paths.
+# Production: courier-service.nurulizyansyaza.com
+# Staging: staging-courier-service.nurulizyansyaza.com
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d              # Start all services
@@ -24,7 +25,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - PRODUCTION_DOMAIN=nurulizyansyaza.com
+      - PRODUCTION_DOMAIN=courier-service.nurulizyansyaza.com
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
@@ -47,7 +48,7 @@ services:
     environment:
       - NODE_ENV=staging
       - PORT=3000
-      - PRODUCTION_DOMAIN=nurulizyansyaza.com
+      - PRODUCTION_DOMAIN=courier-service.nurulizyansyaza.com
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
