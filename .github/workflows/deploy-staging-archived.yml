@@ -1,8 +1,8 @@
-name: Deploy Staging
+name: Deploy Staging (Archived - AWS)
+# ARCHIVED: This is the original AWS deployment workflow, kept for reference.
+# Triggers disabled to prevent accidental execution.
 
 on:
-  push:
-    branches: [staging]
   workflow_dispatch:
     inputs:
       deploy_target:
