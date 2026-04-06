@@ -22,12 +22,12 @@ FRONTEND_DIR="${REPO_ROOT}/../courier-service-frontend"
 # Determine paths based on environment
 if [[ "$ENVIRONMENT" == "staging" ]]; then
   BUILDS_DIR="frontend-builds/staging"
-  BASE_PREFIX="/staging/courier-service/frontend"
-  API_BASE_URL="/staging/courier-service/api"
+  BASE_PREFIX="/frontend"
+  API_BASE_URL="/api"
 else
   BUILDS_DIR="frontend-builds/prod"
-  BASE_PREFIX="/courier-service/frontend"
-  API_BASE_URL="/courier-service/api"
+  BASE_PREFIX="/frontend"
+  API_BASE_URL="/api"
 fi
 
 echo "=== Deploying Frontend to Homelab ($ENVIRONMENT) ==="
@@ -60,6 +60,6 @@ echo ""
 echo "=== Frontend deployment complete ($ENVIRONMENT) ==="
 echo ""
 echo "Framework URLs:"
-echo "  https://$HOMELAB_DOMAIN${BASE_PREFIX}/react/"
-echo "  https://$HOMELAB_DOMAIN${BASE_PREFIX}/vue/"
-echo "  https://$HOMELAB_DOMAIN${BASE_PREFIX}/svelte/"
+echo "  https://$HOMELAB_DOMAIN/frontend/react/"
+echo "  https://$HOMELAB_DOMAIN/frontend/vue/"
+echo "  https://$HOMELAB_DOMAIN/frontend/svelte/"

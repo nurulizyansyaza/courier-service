@@ -133,17 +133,17 @@ graph TB
         HostNginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
 
         RateLimit --> Landing["/courier-service/ → Landing Page"]
-        RateLimit --> ApiRoute["/courier-service/api/* → API Proxy"]
-        RateLimit --> FERoute["/courier-service/frontend/* → Static Files"]
-        RateLimit --> CLIRoute["/courier-service/cli → CLI Docs"]
+        RateLimit --> ApiRoute["/api/* → API Proxy"]
+        RateLimit --> FERoute["/frontend/* → Static Files"]
+        RateLimit --> CLIRoute["/cli → CLI Docs"]
 
         FERoute --> FrontendFiles["Frontend Builds (disk)"]
-        FrontendFiles --> React["/courier-service/frontend/react/"]
-        FrontendFiles --> Vue["/courier-service/frontend/vue/"]
-        FrontendFiles --> Svelte["/courier-service/frontend/svelte/"]
+        FrontendFiles --> React["/frontend/react/"]
+        FrontendFiles --> Vue["/frontend/vue/"]
+        FrontendFiles --> Svelte["/frontend/svelte/"]
 
         ApiRoute --> API["Docker: courier-api<br/>Express on :3000"]
-        RateLimit --> StagingAPI["/staging/courier-service/api/*"]
+        RateLimit --> StagingAPI["/api/* (staging)"]
         StagingAPI --> APIStaging["Docker: courier-api-staging<br/>Express on :3001"]
 
         API -.->|"logs"| Logs["Docker Logs<br/>json-file driver"]
@@ -154,12 +154,12 @@ graph TB
 
 | Environment | Landing Page | Frontend | API | Health Check |
 |---|---|---|---|---|
-| **Production** | `/courier-service/` | `/courier-service/frontend/react/` | `/courier-service/api/*` | `/courier-service/api/health` |
-| **Staging** | `/staging/courier-service/` | `/staging/courier-service/frontend/react/` | `/staging/courier-service/api/*` | `/staging/courier-service/api/health` |
+| **Production** | `courier-service.nurulizyansyaza.com/` | `/frontend/react/` | `/api/*` | `/api/health` |
+| **Staging** | `staging-courier-service.nurulizyansyaza.com/` | `/frontend/react/` | `/api/*` | `/api/health` |
 
 ### API Proxy via Nginx
 
-The frontend uses `/courier-service/api/*` URLs for API calls. The host Nginx strips the `/courier-service` prefix and proxies to the Docker API container:
+The frontend uses `/api/*` URLs for API calls. The host Nginx proxies to the Docker API container:
 
 ```mermaid
 sequenceDiagram
@@ -167,7 +167,7 @@ sequenceDiagram
     participant N as Host Nginx
     participant API as Docker: courier-api
 
-    B->>N: POST /courier-service/api/cost
+    B->>N: POST /api/cost
     N->>API: proxy_pass http://127.0.0.1:3000/api/cost
     API-->>N: JSON response
     N-->>B: JSON result
@@ -176,7 +176,7 @@ sequenceDiagram
 Configuration:
 - **Host Nginx reverse proxy** to Docker containers (prod :3000, staging :3001)
 - **Nginx is not containerized** — it runs on the host, serving the personal site and project routes
-- **No caching** on `/courier-service/api/*` — API responses are never cached
+- **No caching** on `/api/*` — API responses are never cached
 - **Rate limiting** — 60 req/min on API routes, 200 req/min global
 - If API container is unhealthy, Nginx returns 502
 
@@ -372,8 +372,8 @@ Builds the Docker image locally, transfers to homelab, and starts the service:
 Builds all 3 frameworks (React, Vue, Svelte) with sub-path base URLs and uploads to homelab:
 
 ```bash
-./scripts/deploy-frontend.sh production    # Builds with --base=/courier-service/frontend/<fw>/
-./scripts/deploy-frontend.sh staging       # Builds with --base=/staging/courier-service/frontend/<fw>/
+./scripts/deploy-frontend.sh production    # Builds with --base=/frontend/<fw>/
+./scripts/deploy-frontend.sh staging       # Builds with --base=/frontend/<fw>/
 ```
 
 ### Frontend Framework Switching
@@ -381,12 +381,12 @@ Builds all 3 frameworks (React, Vue, Svelte) with sub-path base URLs and uploads
 All three frameworks (React, Vue, Svelte) are deployed simultaneously and served via Nginx:
 
 ```
-https://nurulizyansyaza.com/courier-service/frontend/react/    ← React build
-https://nurulizyansyaza.com/courier-service/frontend/vue/      ← Vue build
-https://nurulizyansyaza.com/courier-service/frontend/svelte/   ← Svelte build
+https://courier-service.nurulizyansyaza.com/frontend/react/    ← React build
+https://courier-service.nurulizyansyaza.com/frontend/vue/      ← Vue build
+https://courier-service.nurulizyansyaza.com/frontend/svelte/   ← Svelte build
 ```
 
-The bare `/courier-service/frontend/` URL redirects to the default framework. To switch:
+The bare `/frontend/` URL redirects to the default framework. To switch:
 
 ```bash
 ./scripts/switch-framework.sh vue production
@@ -409,7 +409,7 @@ gh workflow run deploy-staging.yml --ref main -f deploy_target=all
 Both workflows:
 1. Run all tests (core, CLI, API, frontend)
 2. Build and transfer Docker image to homelab via SSH
-3. Build all 3 frontend frameworks (with `--base=/courier-service/frontend/<fw>/`) and rsync to homelab
+3. Build all 3 frontend frameworks (with `--base=/frontend/<fw>/`) and rsync to homelab
 4. Reload host Nginx to pick up changes
 
 ### Homelab Stack
@@ -435,12 +435,12 @@ infra/
 static/
   index.html             # Landing page at /courier-service/
   index-staging.html     # Staging landing page
-  cli.html               # CLI docs page at /courier-service/cli
+  cli.html               # CLI docs page at /cli
   cli-staging.html       # Staging CLI docs
 scripts/
   deploy-infra.sh        # Initial homelab setup (directory structure, config files)
   deploy-api.sh          # Build Docker → SSH transfer → restart (prod or staging)
-  deploy-frontend.sh     # Build all frameworks (--base=/courier-service/frontend/<fw>/) → rsync
+  deploy-frontend.sh     # Build all frameworks (--base=/frontend/<fw>/) → rsync
   switch-framework.sh    # Update Nginx default framework redirect + reload
 ```
 
