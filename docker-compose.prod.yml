@@ -17,9 +17,7 @@
 services:
   # ── Production API (port 3000) ───────────────────────────────────────
   courier-api:
-    build:
-      context: ..
-      dockerfile: courier-service/Dockerfile
+    image: courier-service-api:latest
     container_name: courier-api
     ports:
       - "3000:3000"
@@ -42,9 +40,7 @@ services:
 
   # ── Staging API (port 3001) ──────────────────────────────────────────
   courier-api-staging:
-    build:
-      context: ..
-      dockerfile: courier-service/Dockerfile
+    image: courier-service-api:latest
     container_name: courier-api-staging
     ports:
       - "3001:3000"
