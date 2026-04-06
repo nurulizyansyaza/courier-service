@@ -126,6 +126,8 @@ jobs:
             UserKnownHostsFile /dev/null
           EOF
           chmod 600 ~/.ssh/config
+
+      - name: Build Docker image
         run: |
           IMAGE_TAG="courier-service-api:${{ github.sha }}"
           docker build \
@@ -210,6 +212,8 @@ jobs:
             UserKnownHostsFile /dev/null
           EOF
           chmod 600 ~/.ssh/config
+
+      - name: Install dependencies
         run: |
           cd courier-service-core && npm ci && npm run build
           cd ../courier-service-frontend && npm ci
