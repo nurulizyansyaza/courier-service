@@ -22,11 +22,11 @@ FRONTEND_DIR="${REPO_ROOT}/../courier-service-frontend"
 # Determine paths based on environment
 if [[ "$ENVIRONMENT" == "staging" ]]; then
   BUILDS_DIR="frontend-builds/staging"
-  BASE_PREFIX="/frontend"
+  BASE_PREFIX=""
   API_BASE_URL="/api"
 else
   BUILDS_DIR="frontend-builds/prod"
-  BASE_PREFIX="/frontend"
+  BASE_PREFIX=""
   API_BASE_URL="/api"
 fi
 
@@ -41,7 +41,7 @@ for FRAMEWORK in react vue svelte; do
   cd "$FRONTEND_DIR"
 
   npm run "use:${FRAMEWORK}"
-  VITE_API_BASE_URL="$API_BASE_URL" npx vite build --base="${BASE_PREFIX}/${FRAMEWORK}/"
+  VITE_API_BASE_URL="$API_BASE_URL" npx vite build --base="/${FRAMEWORK}/"
 
   echo "── Uploading $FRAMEWORK to homelab ──"
   rsync -az --delete \
@@ -60,6 +60,6 @@ echo ""
 echo "=== Frontend deployment complete ($ENVIRONMENT) ==="
 echo ""
 echo "Framework URLs:"
-echo "  https://$HOMELAB_DOMAIN/frontend/react/"
-echo "  https://$HOMELAB_DOMAIN/frontend/vue/"
-echo "  https://$HOMELAB_DOMAIN/frontend/svelte/"
+echo "  https://$HOMELAB_DOMAIN/react/"
+echo "  https://$HOMELAB_DOMAIN/vue/"
+echo "  https://$HOMELAB_DOMAIN/svelte/"
