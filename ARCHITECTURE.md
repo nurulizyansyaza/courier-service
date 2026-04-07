@@ -138,9 +138,9 @@ graph TB
         RateLimit --> CLIRoute["/cli → CLI Docs"]
 
         FERoute --> FrontendFiles["Frontend Builds (disk)"]
-        FrontendFiles --> React["/frontend/react/"]
-        FrontendFiles --> Vue["/frontend/vue/"]
-        FrontendFiles --> Svelte["/frontend/svelte/"]
+        FrontendFiles --> React["/react/"]
+        FrontendFiles --> Vue["/vue/"]
+        FrontendFiles --> Svelte["/svelte/"]
 
         ApiRoute --> API["Docker: courier-api<br/>Express on :3000"]
         RateLimit --> StagingAPI["/api/* (staging)"]
@@ -154,8 +154,8 @@ graph TB
 
 | Environment | Landing Page | Frontend | API | Health Check |
 |---|---|---|---|---|
-| **Production** | `courier-service.nurulizyansyaza.com/` | `/frontend/react/` | `/api/*` | `/api/health` |
-| **Staging** | `staging-courier-service.nurulizyansyaza.com/` | `/frontend/react/` | `/api/*` | `/api/health` |
+| **Production** | `courier-service.nurulizyansyaza.com/` | `/react/` | `/api/*` | `/api/health` |
+| **Staging** | `staging-courier-service.nurulizyansyaza.com/` | `/react/` | `/api/*` | `/api/health` |
 
 ### API Proxy via Nginx
 
