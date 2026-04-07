@@ -138,9 +138,9 @@ graph TB
         RateLimit --> CLIRoute["/cli → CLI Docs"]
 
         FERoute --> FrontendFiles["Frontend Builds (disk)"]
-        FrontendFiles --> React["/frontend/react/"]
-        FrontendFiles --> Vue["/frontend/vue/"]
-        FrontendFiles --> Svelte["/frontend/svelte/"]
+        FrontendFiles --> React["/react/"]
+        FrontendFiles --> Vue["/vue/"]
+        FrontendFiles --> Svelte["/svelte/"]
 
         ApiRoute --> API["Docker: courier-api<br/>Express on :3000"]
         RateLimit --> StagingAPI["/api/* (staging)"]
@@ -154,8 +154,8 @@ graph TB
 
 | Environment | Landing Page | Frontend | API | Health Check |
 |---|---|---|---|---|
-| **Production** | `courier-service.nurulizyansyaza.com/` | `/frontend/react/` | `/api/*` | `/api/health` |
-| **Staging** | `staging-courier-service.nurulizyansyaza.com/` | `/frontend/react/` | `/api/*` | `/api/health` |
+| **Production** | `courier-service.nurulizyansyaza.com/` | `/react/` | `/api/*` | `/api/health` |
+| **Staging** | `staging-courier-service.nurulizyansyaza.com/` | `/react/` | `/api/*` | `/api/health` |
 
 ### API Proxy via Nginx
 
@@ -381,9 +381,9 @@ Builds all 3 frameworks (React, Vue, Svelte) with sub-path base URLs and uploads
 All three frameworks (React, Vue, Svelte) are deployed simultaneously and served via Nginx:
 
 ```
-https://courier-service.nurulizyansyaza.com/frontend/react/    ← React build
-https://courier-service.nurulizyansyaza.com/frontend/vue/      ← Vue build
-https://courier-service.nurulizyansyaza.com/frontend/svelte/   ← Svelte build
+https://courier-service.nurulizyansyaza.com/react/    ← React build
+https://courier-service.nurulizyansyaza.com/vue/      ← Vue build
+https://courier-service.nurulizyansyaza.com/svelte/   ← Svelte build
 ```
 
 The bare `/frontend/` URL redirects to the default framework. To switch:
@@ -416,7 +416,7 @@ Both workflows:
 
 | Component | Purpose | Replaces (AWS) |
 |-----------|---------|----------------|
-| **Host Nginx** | Reverse proxy + static files + rate limiting + sub-path routing | CloudFront + S3 + API Gateway + WAF |
+| **Host Nginx** | Reverse proxy + static files + rate limiting + subdomain routing | CloudFront + S3 + API Gateway + WAF |
 | **Docker** | API containers (prod + staging) | ECS Fargate + ECR |
 | **Docker Compose** | Service orchestration | CloudFormation |
 | **SSH + rsync** | Deployment | AWS CLI + ECR push + S3 sync |
