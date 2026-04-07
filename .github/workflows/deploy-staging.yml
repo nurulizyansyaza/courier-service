@@ -229,7 +229,7 @@ jobs:
         run: |
           cd courier-service-frontend
           npm run use:react
-          VITE_API_BASE_URL=/api npx vite build --base=/frontend/react/
+          VITE_API_BASE_URL=/api npx vite build --base=/react/
           rsync -az --delete dist/ \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/staging/react/
 
@@ -237,7 +237,7 @@ jobs:
         run: |
           cd courier-service-frontend
           npm run use:vue
-          VITE_API_BASE_URL=/api npx vite build --base=/frontend/vue/
+          VITE_API_BASE_URL=/api npx vite build --base=/vue/
           rsync -az --delete dist/ \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/staging/vue/
 
@@ -245,7 +245,7 @@ jobs:
         run: |
           cd courier-service-frontend
           npm run use:svelte
-          VITE_API_BASE_URL=/api npx vite build --base=/frontend/svelte/
+          VITE_API_BASE_URL=/api npx vite build --base=/svelte/
           rsync -az --delete dist/ \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/staging/svelte/
 
@@ -254,4 +254,4 @@ jobs:
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
 
       - name: Print staging frontend URL
-        run: echo "::notice::Staging frontend deployed to https://${{ env.HOMELAB_DOMAIN }}/frontend/"
+        run: echo "::notice::Staging frontend deployed to https://${{ env.HOMELAB_DOMAIN }}/react/"
