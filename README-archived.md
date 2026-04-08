@@ -1,11 +1,5 @@
 # Courier Service — Getting Started
 
-> **Coding Challenge**: Courier Service — Delivery Cost & Time Estimation
-> **Role**: Full Stack Engineer @ [EverestEngineering](https://www.linkedin.com/company/everestengineering/) (PJ, Malaysia)
-> **Candidate**: Nurul Izyan Syaza
-
----
-
 ## What This Project Does
 
 A courier service calculator that solves two problems:
