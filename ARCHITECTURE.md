@@ -127,12 +127,13 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    Browser["🌐 Browser"] --> HostNginx["Host Nginx<br/>nurulizyansyaza.com"]
+    Browser["🌐 Browser"] --> CF["Cloudflare Tunnel<br/>nurulizyansyaza.com"]
 
     subgraph Homelab["Homelab Server"]
-        HostNginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
+        CF --> Nginx["Docker: courier-nginx<br/>nginx:alpine · localhost:8090"]
+        Nginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
 
-        RateLimit --> Landing["/courier-service/ → Landing Page"]
+        RateLimit --> Landing["/ → Landing Page"]
         RateLimit --> ApiRoute["/api/* → API Proxy"]
         RateLimit --> FERoute["/frontend/* → Static Files"]
         RateLimit --> CLIRoute["/cli → CLI Docs"]
@@ -159,23 +160,23 @@ graph TB
 
 ### API Proxy via Nginx
 
-The frontend uses `/api/*` URLs for API calls. The host Nginx proxies to the Docker API container:
+The frontend uses `/api/*` URLs for API calls. The containerized Nginx (`courier-nginx`) proxies to the API container over the internal Docker network:
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant N as Host Nginx
+    participant N as courier-nginx (Docker)
     participant API as Docker: courier-api
 
     B->>N: POST /api/cost
-    N->>API: proxy_pass http://127.0.0.1:3000/api/cost
+    N->>API: proxy_pass http://courier-api:3000/api/cost
     API-->>N: JSON response
     N-->>B: JSON result
 ```
 
 Configuration:
-- **Host Nginx reverse proxy** to Docker containers (prod :3000, staging :3001)
-- **Nginx is not containerized** — it runs on the host, serving the personal site and project routes
+- **Containerized Nginx** (`courier-nginx`, nginx:alpine) reverse-proxies to the API containers over the internal Docker network (prod `courier-api:3000`, staging `courier-api-staging:3000`)
+- **Fronted by Cloudflare Tunnel** — both subdomains route to `courier-nginx` on `localhost:8090`; the real client IP is read from the `CF-Connecting-IP` header
 - **No caching** on `/api/*` — API responses are never cached
 - **Rate limiting** — 60 req/min on API routes, 200 req/min global
 - If API container is unhealthy, Nginx returns 502
