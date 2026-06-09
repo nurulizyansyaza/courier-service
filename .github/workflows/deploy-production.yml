@@ -145,11 +145,12 @@ jobs:
         run: |
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
             set -euo pipefail
-            # Remove nginx.conf if it was incorrectly created as a directory (root-owned by Docker)
-            if [ -d "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf" ]; then
-              docker run --rm -v ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx:/work alpine rm -rf /work/nginx.conf
-            fi
-            mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/conf.d"
+            DEPLOY_UID=$(id -u)
+            DEPLOY_GID=$(id -g)
+            # Use Docker Alpine to remove bad nginx.conf dir and fix root-owned paths
+            docker run --rm \
+              -v ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service:/work \
+              alpine sh -c "rm -rf /work/infra/nginx/nginx.conf 2>/dev/null || true; mkdir -p /work/infra/nginx/conf.d; chown -R ${DEPLOY_UID}:${DEPLOY_GID} /work/infra"
             mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/static"
           EOF
 
