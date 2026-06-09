@@ -150,9 +150,14 @@ jobs:
 
       - name: Ensure remote directories exist
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} \
-            "mkdir -p ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/conf.d \
-                      ${{ env.HOMELAB_DEPLOY_PATH }}/static"
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
+            set -euo pipefail
+            # Remove nginx.conf if it was incorrectly created as a directory
+            [ -d "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf" ] && \
+              rm -rf "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf"
+            mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/conf.d"
+            mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/static"
+          EOF
 
       - name: Copy config files
         run: |
@@ -274,10 +279,9 @@ jobs:
         run: |
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
             set -euo pipefail
-            cd ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service
-            docker compose -f docker-compose.prod.yml up -d --no-deps courier-nginx
-            docker exec courier-nginx nginx -t
-            docker exec courier-nginx nginx -s reload
+            if docker ps -q -f name=courier-nginx | grep -q .; then
+              docker exec courier-nginx nginx -t && docker exec courier-nginx nginx -s reload
+            fi
           EOF
 
       - name: Print staging frontend URL
