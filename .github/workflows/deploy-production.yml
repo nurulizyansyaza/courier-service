@@ -141,6 +141,12 @@ jobs:
           docker save "courier-service-api:latest" | \
             ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "docker load"
 
+      - name: Ensure remote directories exist
+        run: |
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} \
+            "mkdir -p ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/conf.d \
+                      ${{ env.HOMELAB_DEPLOY_PATH }}/static"
+
       - name: Copy config files
         run: |
           scp courier-service/docker-compose.prod.yml \
@@ -225,6 +231,13 @@ jobs:
         run: |
           cd courier-service-core && npm ci && npm run build
           cd ../courier-service-frontend && npm ci
+
+      - name: Ensure remote directories exist
+        run: |
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} \
+            "mkdir -p ${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/react \
+                      ${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/vue \
+                      ${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/svelte"
 
       - name: Build and deploy React
         run: |
