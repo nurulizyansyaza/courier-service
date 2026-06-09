@@ -353,7 +353,7 @@ cd courier-service
 ```
 
 This sets up:
-- Project directories on the homelab (`/opt/courier-service/`)
+- Project directories on the homelab (`/data/courier-service/`)
 - Nginx snippet for sub-path routing (include in host Nginx config)
 - Docker Compose production stack
 - Static landing page and CLI docs page

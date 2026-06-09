@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  HOMELAB_DEPLOY_PATH: /opt/courier-service
+  HOMELAB_DEPLOY_PATH: /data/courier-service
   HOMELAB_DOMAIN: staging-courier-service.nurulizyansyaza.com
   ENVIRONMENT: staging
   CORE_REF: main
