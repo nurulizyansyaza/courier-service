@@ -147,7 +147,7 @@ jobs:
             set -euo pipefail
             # Remove nginx.conf if it was incorrectly created as a directory
             [ -d "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf" ] && \
-              rm -rf "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf"
+              sudo rm -rf "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf"
             mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/conf.d"
             mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/static"
           EOF
