@@ -25,7 +25,7 @@ permissions:
   contents: read
 
 env:
-  HOMELAB_DEPLOY_PATH: /opt/courier-service
+  HOMELAB_DEPLOY_PATH: /data/courier-service
   HOMELAB_DOMAIN: courier-service.nurulizyansyaza.com
   ENVIRONMENT: production
   CORE_REF: main
@@ -147,6 +147,8 @@ jobs:
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/
           scp courier-service/infra/nginx/nginx.conf \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/
+          scp -r courier-service/infra/nginx/conf.d \
+            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/
 
       - name: Copy static pages
         run: |
@@ -168,7 +170,13 @@ jobs:
 
       - name: Reload Nginx
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
+            set -euo pipefail
+            cd ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service
+            docker compose -f docker-compose.prod.yml up -d --no-deps courier-nginx
+            docker exec courier-nginx nginx -t
+            docker exec courier-nginx nginx -s reload
+          EOF
 
       - name: Print API URL
         run: echo "::notice::API deployed to https://${{ env.HOMELAB_DOMAIN }}/api/health"
@@ -244,7 +252,13 @@ jobs:
 
       - name: Reload Nginx
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
+            set -euo pipefail
+            cd ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service
+            docker compose -f docker-compose.prod.yml up -d --no-deps courier-nginx
+            docker exec courier-nginx nginx -t
+            docker exec courier-nginx nginx -s reload
+          EOF
 
       - name: Print Frontend URL
         run: echo "::notice::Frontend deployed to https://${{ env.HOMELAB_DOMAIN }}/react/"
