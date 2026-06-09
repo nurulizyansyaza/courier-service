@@ -145,9 +145,10 @@ jobs:
         run: |
           ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
             set -euo pipefail
-            # Remove nginx.conf if it was incorrectly created as a directory
-            [ -d "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf" ] && \
-              sudo rm -rf "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf"
+            # Remove nginx.conf if it was incorrectly created as a directory (root-owned by Docker)
+            if [ -d "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/nginx.conf" ]; then
+              docker run --rm -v ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx:/work alpine rm -rf /work/nginx.conf
+            fi
             mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/conf.d"
             mkdir -p "${{ env.HOMELAB_DEPLOY_PATH }}/static"
           EOF
