@@ -25,7 +25,7 @@ permissions:
   contents: read
 
 env:
-  HOMELAB_DEPLOY_PATH: /data/courier-service
+  HOMELAB_DEPLOY_PATH: /data
   HOMELAB_DOMAIN: courier-service.nurulizyansyaza.com
   ENVIRONMENT: production
   CORE_REF: main
