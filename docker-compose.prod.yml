@@ -2,7 +2,7 @@
 #
 # Architecture:
 #   Host Nginx (nurulizyansyaza.com) → API Docker containers
-#   Host Nginx serves static files directly from /opt/courier-service/
+#   Host Nginx serves static files directly from /data/
 #
 # The host Nginx includes courier-service/infra/nginx/nginx.conf as a snippet
 # Production: courier-service.nurulizyansyaza.com
