@@ -127,12 +127,13 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    Browser["🌐 Browser"] --> HostNginx["Host Nginx<br/>nurulizyansyaza.com"]
+    Browser["🌐 Browser"] --> CF["Cloudflare Tunnel<br/>nurulizyansyaza.com"]
 
     subgraph Homelab["Homelab Server"]
-        HostNginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
+        CF --> Nginx["Docker: courier-nginx<br/>nginx:alpine · localhost:8090"]
+        Nginx --> RateLimit["Rate Limiting<br/>200 req/min global · 60 req/min API"]
 
-        RateLimit --> Landing["/courier-service/ → Landing Page"]
+        RateLimit --> Landing["/ → Landing Page"]
         RateLimit --> ApiRoute["/api/* → API Proxy"]
         RateLimit --> FERoute["/frontend/* → Static Files"]
         RateLimit --> CLIRoute["/cli → CLI Docs"]
@@ -159,23 +160,23 @@ graph TB
 
 ### API Proxy via Nginx
 
-The frontend uses `/api/*` URLs for API calls. The host Nginx proxies to the Docker API container:
+The frontend uses `/api/*` URLs for API calls. The containerized Nginx (`courier-nginx`) proxies to the API container over the internal Docker network:
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant N as Host Nginx
+    participant N as courier-nginx (Docker)
     participant API as Docker: courier-api
 
     B->>N: POST /api/cost
-    N->>API: proxy_pass http://127.0.0.1:3000/api/cost
+    N->>API: proxy_pass http://courier-api:3000/api/cost
     API-->>N: JSON response
     N-->>B: JSON result
 ```
 
 Configuration:
-- **Host Nginx reverse proxy** to Docker containers (prod :3000, staging :3001)
-- **Nginx is not containerized** — it runs on the host, serving the personal site and project routes
+- **Containerized Nginx** (`courier-nginx`, nginx:alpine) reverse-proxies to the API containers over the internal Docker network (prod `courier-api:3000`, staging `courier-api-staging:3000`)
+- **Fronted by Cloudflare Tunnel** — both subdomains route to `courier-nginx` on `localhost:8090`; the real client IP is read from the `CF-Connecting-IP` header
 - **No caching** on `/api/*` — API responses are never cached
 - **Rate limiting** — 60 req/min on API routes, 200 req/min global
 - If API container is unhealthy, Nginx returns 502
@@ -335,9 +336,9 @@ The runtime image includes:
 
 ### Prerequisites
 
-1. **Homelab server** running Docker and Docker Compose, with Nginx installed on the host
+1. **Homelab server** running Docker and Docker Compose (Nginx runs as the `courier-nginx` container — nothing is installed on the host)
 2. **SSH access** via Cloudflare Tunnel (`ssh nurulizyansyaza@ssh.nurulizyansyaza.com` through `cloudflared`)
-3. **Host Nginx** already serving `nurulizyansyaza.com` — the project is added as location blocks
+3. **Cloudflare Tunnel** routing `courier-service.nurulizyansyaza.com` and `staging-courier-service.nurulizyansyaza.com` to the `courier-nginx` container on `localhost:8090`
 4. **GitHub Secrets** set on the `courier-service` repo:
    - `HOMELAB_SSH_KEY` — SSH private key for the deploy user
    - `HOMELAB_USER` — SSH username (e.g., `nurulizyansyaza`)
@@ -353,8 +354,8 @@ cd courier-service
 ```
 
 This sets up:
-- Project directories on the homelab (`/data/courier-service/`)
-- Nginx snippet for sub-path routing (include in host Nginx config)
+- Project directories on the homelab (`/data/` — `courier-service/`, `static/`, `frontend-builds/`)
+- Nginx config mounted into the `courier-nginx` container (`nginx.conf` + `conf.d/courier.conf`)
 - Docker Compose production stack
 - Static landing page and CLI docs page
 
@@ -410,13 +411,14 @@ Both workflows:
 1. Run all tests (core, CLI, API, frontend)
 2. Build and transfer Docker image to homelab via SSH
 3. Build all 3 frontend frameworks (with `--base=/frontend/<fw>/`) and rsync to homelab
-4. Reload host Nginx to pick up changes
+4. Reload the `courier-nginx` container (`docker exec courier-nginx nginx -s reload`) to pick up changes
 
 ### Homelab Stack
 
 | Component | Purpose | Replaces (AWS) |
 |-----------|---------|----------------|
-| **Host Nginx** | Reverse proxy + static files + rate limiting + sub-path routing | CloudFront + S3 + API Gateway + WAF |
+| **Cloudflare Tunnel** | Public ingress + TLS + DDoS protection | Route 53 + ACM + public ALB |
+| **courier-nginx (Docker)** | Reverse proxy + static files + rate limiting + subdomain routing | CloudFront + S3 + API Gateway + WAF |
 | **Docker** | API containers (prod + staging) | ECS Fargate + ECR |
 | **Docker Compose** | Service orchestration | CloudFormation |
 | **SSH + rsync** | Deployment | AWS CLI + ECR push + S3 sync |
@@ -428,12 +430,14 @@ Both workflows:
 ```
 infra/
   nginx/
-    nginx.conf           # Includable Nginx snippet for sub-path routing
+    nginx.conf           # Base config (events, http, gzip, rate-limit zones)
+    conf.d/
+      courier.conf       # Server blocks: prod + staging subdomains, /api proxy, framework routes
   env/
     production.env       # Production config (domain, paths)
     staging.env          # Staging config
 static/
-  index.html             # Landing page at /courier-service/
+  index.html             # Landing page at /
   index-staging.html     # Staging landing page
   cli.html               # CLI docs page at /cli
   cli-staging.html       # Staging CLI docs
@@ -497,7 +501,7 @@ graph LR
 | **UFW Firewall** | Allow only ports 22 (SSH), 80 (HTTP), 443 (HTTPS) |
 | **fail2ban** | Brute-force SSH protection |
 | **Nginx Security Headers** | X-Frame-Options, X-Content-Type-Options, CSP, XSS-Protection |
-| **Docker Network** | API containers bound to localhost, only reachable via host Nginx proxy |
+| **Docker Network** | API containers on a private Docker network, only reachable via the `courier-nginx` proxy |
 | **Gzip Compression** | Reduces bandwidth for static assets |
 | **Client Body Limit** | 100kb max request body at Nginx level |
 

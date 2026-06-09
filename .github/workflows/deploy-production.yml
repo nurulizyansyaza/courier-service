@@ -25,7 +25,7 @@ permissions:
   contents: read
 
 env:
-  HOMELAB_DEPLOY_PATH: /data/courier-service
+  HOMELAB_DEPLOY_PATH: /data
   HOMELAB_DOMAIN: courier-service.nurulizyansyaza.com
   ENVIRONMENT: production
   CORE_REF: main
@@ -141,11 +141,29 @@ jobs:
           docker save "courier-service-api:latest" | \
             ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "docker load"
 
+      - name: Ensure remote directories exist
+        run: |
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
+            set -euo pipefail
+            DEPLOY_UID=$(id -u)
+            DEPLOY_GID=$(id -g)
+            # Use Docker Alpine to remove bad nginx.conf dir and fix root-owned paths
+            docker run --rm \
+              -v ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service:/work \
+              alpine sh -c "rm -rf /work/infra/nginx/nginx.conf 2>/dev/null || true; mkdir -p /work/infra/nginx/conf.d; chown -R ${DEPLOY_UID}:${DEPLOY_GID} /work/infra"
+            # Create and fix ownership of the static dir (may be root-owned by a container)
+            docker run --rm \
+              -v ${{ env.HOMELAB_DEPLOY_PATH }}:/work \
+              alpine sh -c "mkdir -p /work/static; chown -R ${DEPLOY_UID}:${DEPLOY_GID} /work/static"
+          EOF
+
       - name: Copy config files
         run: |
           scp courier-service/docker-compose.prod.yml \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/
           scp courier-service/infra/nginx/nginx.conf \
+            ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/
+          scp -r courier-service/infra/nginx/conf.d \
             ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:${{ env.HOMELAB_DEPLOY_PATH }}/courier-service/infra/nginx/
 
       - name: Copy static pages
@@ -168,7 +186,13 @@ jobs:
 
       - name: Reload Nginx
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
+            set -euo pipefail
+            cd ${{ env.HOMELAB_DEPLOY_PATH }}/courier-service
+            docker compose -f docker-compose.prod.yml up -d --no-deps courier-nginx
+            docker exec courier-nginx nginx -t
+            docker exec courier-nginx nginx -s reload
+          EOF
 
       - name: Print API URL
         run: echo "::notice::API deployed to https://${{ env.HOMELAB_DOMAIN }}/api/health"
@@ -218,6 +242,13 @@ jobs:
           cd courier-service-core && npm ci && npm run build
           cd ../courier-service-frontend && npm ci
 
+      - name: Ensure remote directories exist
+        run: |
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} \
+            "mkdir -p ${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/react \
+                      ${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/vue \
+                      ${{ env.HOMELAB_DEPLOY_PATH }}/frontend-builds/prod/svelte"
+
       - name: Build and deploy React
         run: |
           cd courier-service-frontend
@@ -244,7 +275,12 @@ jobs:
 
       - name: Reload Nginx
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} "sudo nginx -t && sudo systemctl reload nginx"
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} bash -s <<'EOF'
+            set -euo pipefail
+            if docker ps -q -f name=courier-nginx | grep -q .; then
+              docker exec courier-nginx nginx -t && docker exec courier-nginx nginx -s reload
+            fi
+          EOF
 
       - name: Print Frontend URL
         run: echo "::notice::Frontend deployed to https://${{ env.HOMELAB_DOMAIN }}/react/"
