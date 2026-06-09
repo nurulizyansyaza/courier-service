@@ -336,11 +336,11 @@ The runtime image includes:
 ### Prerequisites
 
 1. **Homelab server** running Docker and Docker Compose, with Nginx installed on the host
-2. **SSH access** via Cloudflare Tunnel (`ssh yangedruce@ssh.nurulizyansyaza.com` through `cloudflared`)
+2. **SSH access** via Cloudflare Tunnel (`ssh nurulizyansyaza@ssh.nurulizyansyaza.com` through `cloudflared`)
 3. **Host Nginx** already serving `nurulizyansyaza.com` — the project is added as location blocks
 4. **GitHub Secrets** set on the `courier-service` repo:
    - `HOMELAB_SSH_KEY` — SSH private key for the deploy user
-   - `HOMELAB_USER` — SSH username (e.g., `yangedruce`)
+   - `HOMELAB_USER` — SSH username (e.g., `nurulizyansyaza`)
    - `HOMELAB_HOST` — Cloudflare Tunnel hostname for SSH (e.g., `ssh.nurulizyansyaza.com`)
 
 ### Step 1: Setup Infrastructure
